@@ -1,0 +1,23 @@
+# --- Secretos ---
+.env
+
+# --- .NET ---
+bin/
+obj/
+*.user
+.vs/
+[Dd]ebug/
+[Rr]elease/
+
+# --- Angular / Node ---
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+
+# --- Editor/OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

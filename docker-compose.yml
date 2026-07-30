@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: scrumboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - scrumboard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: src/ScrumBoard.Api/Dockerfile
+    container_name: scrumboard-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Jwt__ExpiracionMinutos: ${JWT_EXPIRACION_MINUTOS}
+      PasswordHasher__Pepper: ${PASSWORD_PEPPER}
+      FrontendUrl: ${FRONTEND_URL}
+    ports:
+      - "${API_PORT}:8080"
+
+  # NOTA: se agrega en el día de scaffolding del frontend (ver docs/decisiones.md).
+  # Servirá el build de producción de Angular con nginx, leyendo la URL de la Api
+  # y del hub de SignalR desde environment.prod.ts (generado en build time), nunca
+  # embebida en componentes/servicios (requisito 6.1).
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #     args:
+  #       API_URL: ${API_URL}
+  #       SIGNALR_URL: ${SIGNALR_URL}
+  #   container_name: scrumboard-frontend
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - api
+  #   ports:
+  #     - "${FRONTEND_PORT}:80"
+
+volumes:
+  scrumboard_pgdata:
