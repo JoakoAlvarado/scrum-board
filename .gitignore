@@ -8,6 +8,7 @@ obj/
 .vs/
 [Dd]ebug/
 [Rr]elease/
+**/Properties/launchSettings.json
 
 # --- Angular / Node ---
 node_modules/

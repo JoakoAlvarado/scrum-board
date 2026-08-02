@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.vs/
+.vscode/
+.git/
+.gitignore
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+coverage/
+node_modules/
