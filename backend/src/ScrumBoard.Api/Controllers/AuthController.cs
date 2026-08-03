@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using ScrumBoard.Application.Exceptions;
 using ScrumBoard.Application.Services;
 
 namespace ScrumBoard.Api.Controllers;
@@ -17,14 +16,8 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
     {
-        try
-        {
-            var resultado = await _authService.LoginAsync(request.Email, request.Password, ct);
-            return Ok(resultado);
-        }
-        catch (CredencialesInvalidasException ex)
-        {
-            return Unauthorized(new { mensaje = ex.Message });
-        }
+        // CredencialesInvalidasException se traduce a 401 en ExceptionHandlingMiddleware.
+        var resultado = await _authService.LoginAsync(request.Email, request.Password, ct);
+        return Ok(resultado);
     }
 }

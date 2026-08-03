@@ -28,11 +28,13 @@ builder.Services.AddDbContext<ScrumBoardDbContext>(options =>
 
 // --- Puertos / adaptadores (Infrastructure) ---
 builder.Services.AddScoped<IUsuarioRepository, EfUsuarioRepository>();
+builder.Services.AddScoped<IProyectoRepository, EfProyectoRepository>();
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 
 // --- Casos de uso (Application) ---
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IProyectoService, ProyectoService>();
 
 // --- Autenticación JWT ---
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SeccionConfig);
@@ -94,7 +96,35 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // Agrega el botón "Authorize" en Swagger UI para poder probar los endpoints
+    // protegidos (ej. /api/proyectos) pegando el token que devuelve /api/auth/login.
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Pegar únicamente el token (sin el prefijo 'Bearer ')."
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 
@@ -114,6 +144,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<ScrumBoard.Api.Middleware.ExceptionHandlingMiddleware>();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
