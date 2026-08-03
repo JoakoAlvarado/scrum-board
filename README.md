@@ -20,8 +20,12 @@ Excel. Desarrollado como prueba técnica para IDEASGROUP (proceso IDEASGROUP-REM
 | Frontend Angular 17 + PrimeNG Sakai (scaffold, tema, layout) | OK |
 | Frontend — login real conectado a la Api | OK |
 | Frontend — guard de ruta + interceptor JWT | OK |
-| Frontend — CRUD de Proyectos/Columnas/Tareas, tablero kanban | ⏳ pendiente |
-| Tiempo real (SignalR), reportes (PDF/Excel) | ⏳ pendiente |
+| Frontend — CRUD de Proyectos/Columnas/Tareas, tablero kanban | pendiente |
+| Tiempo real (SignalR), reportes (PDF/Excel) | pendiente |
+| **Backend — CRUD de Proyectos (paginado + filtro)** | OK |
+| Backend — middleware centralizado de excepciones | OK |
+| Backend — Swagger con autenticación Bearer | OK |
+| Backend — CRUD de Columnas/Tareas | pendiente |
 
 > Bitácora de decisiones técnicas: [`docs/decisiones.md`](docs/decisiones.md).
 
@@ -255,6 +259,25 @@ almacenando en el filesystem efímero del contenedor (`/root/.aspnet/DataProtect
 afecta el desarrollo del challenge, pero en un entorno productivo real esas claves deberían
 persistirse fuera del contenedor (volumen, almacenamiento externo o Azure Key Vault, según el
 proveedor).
+
+## API de Proyectos
+
+Todos los endpoints requieren JWT (`Authorization: Bearer <token>`, o el botón "Authorize" en
+Swagger pegando solo el token).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/proyectos?nombre=&pagina=&tamanioPagina=` | Paginado, filtro por nombre (coincidencia parcial, case-insensitive, resuelto en el servidor con `ILIKE`) |
+| `GET` | `/api/proyectos/{id}` | Detalle de un proyecto |
+| `POST` | `/api/proyectos` | Alta |
+| `PUT` | `/api/proyectos/{id}` | Edición (incluye cambio de estado) |
+| `DELETE` | `/api/proyectos/{id}` | Baja |
+
+`tamanioPagina` tiene un tope de 50 (definido en `ProyectoService`) para evitar listados sin
+cota. Las excepciones de negocio (`RecursoNoEncontradoException` → 404,
+`CredencialesInvalidasException` → 401, `DomainException` → 409, `ArgumentException` → 400) se
+traducen centralizadamente en `ExceptionHandlingMiddleware`; los controllers no repiten
+try/catch en cada acción.
 
 ## Frontend — estado y próximos pasos
 

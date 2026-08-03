@@ -136,3 +136,32 @@ sustituyan estos valores después del build. Si cambian los puertos/hosts, hay q
 **Frontend dockerizado con build multi-stage + nginx.** `frontend/Dockerfile` compila con
 `ng build --configuration production` en una etapa `node:20-alpine` y sirve el resultado con
 `nginx:alpine`, con `frontend/nginx.conf` agregando el `try_files` de SPA mencionado arriba.
+
+## CRUD de Proyectos (backend)
+
+**Listado paginado: proyección directa a DTO, no el agregado completo.** El puerto
+`IProyectoRepository.ListarPaginadoAsync` devuelve `ProyectoDto` directamente (vía `.Select`
+de EF Core), en vez de `Proyecto` con `.Include(Columnas).Include(Tareas)`. El conteo de
+columnas/tareas por proyecto se resuelve como subquery `COUNT` en SQL, sin traer esas
+colecciones completas a memoria para cada fila del listado. Las operaciones de un solo
+proyecto (`ObtenerPorIdAsync`, alta/edición/baja) sí cargan el agregado completo — ahí el
+volumen es acotado (un proyecto a la vez) y se necesita para aplicar las reglas de negocio del
+agregado `Proyecto`.
+
+**Filtro por nombre con `ILIKE` (Npgsql).** Coincidencia parcial case-insensitive resuelta en
+PostgreSQL (`EF.Functions.ILike`), no trayendo todos los proyectos para filtrar en memoria.
+
+**Middleware centralizado de excepciones (`ExceptionHandlingMiddleware`).** Traduce
+`RecursoNoEncontradoException` → 404, `CredencialesInvalidasException` → 401,
+`DomainException` (reglas de negocio del dominio, ej. "no eliminar columna con tareas") → 409,
+`ArgumentException` (validaciones de entidad) → 400, y cualquier otra excepción → 500 sin
+exponer detalles internos (se loguea el detalle completo del lado del servidor). Los
+controllers ya no repiten `try/catch` en cada acción — quedan como simples orquestadores del
+caso de uso.
+
+**Swagger con autenticación Bearer.** Se agregó `AddSecurityDefinition`/`AddSecurityRequirement`
+para poder probar `/api/proyectos` (protegido con JWT) directo desde Swagger UI, pegando el
+token que devuelve `/api/auth/login` en el botón "Authorize".
+
+**Sin cambios de esquema de base de datos.** El CRUD de Proyectos usa las entidades y la
+migración `InitialCreate` ya existentes desde el día 1 — no hizo falta una migración nueva.
