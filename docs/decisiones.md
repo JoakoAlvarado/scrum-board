@@ -88,3 +88,51 @@ Swagger.
 **Pendiente para un entorno productivo (no bloqueante para el challenge):** las claves de
 ASP.NET Core Data Protection se almacenan hoy en el filesystem efímero del contenedor
 (warning visible en logs). En producción deberían persistirse fuera del contenedor.
+
+## Frontend (Angular 17 + PrimeNG Sakai)
+
+**Versión del template: tag `17.0.0` de `primefaces/sakai-ng`, no `master`.** El repositorio
+de Sakai en su rama principal ya está en Angular 21/PrimeNG 21; el enunciado pide
+específicamente Angular 17. Se usó el tag `17.0.0` (Angular 17.0.5, PrimeNG 17.2.0), que es la
+versión del template contemporánea a esa versión de Angular. Licencia MIT verificada en
+`LICENSE.md` del template (no es la línea comercial de PrimeNG, pese a que el `package.json`
+original traía por error `"license": "PrimeNG Commercial"` — se corrigió a `MIT` en nuestro
+`package.json`).
+
+**Tema fijo `lara-light-blue`, sin selector de temas.** Sakai trae por defecto un panel
+flotante para cambiar tema/color en caliente (`app-config`, botón engranaje). Se quitó
+completamente: el enunciado deja el diseño visual a criterio del candidato y pide centrarse en
+funcionalidad, no en aspecto gráfico — un selector de 15 temas no aporta valor funcional y
+suma superficie de código sin usar. Paleta fija: azul/celeste + blanco.
+
+**Reestructuración en capas (`core/` / `features/` / `shared/` / `layout/`).** El template
+trae todo el código de negocio bajo `demo/components/*` (dashboard, uikit, prime blocks,
+utilidades, páginas de ejemplo). Se eliminó todo lo que no es parte del challenge y se
+reorganizó lo que sí se usa:
+- `layout/` — el "chrome" de Sakai (topbar, sidebar, menú, footer), sin tocar su mecánica interna.
+- `core/` — servicios transversales: `AuthService`, `authGuard` (funcional, Angular 17),
+  `AuthInterceptor` (adjunta el JWT y maneja 401).
+- `features/auth/login` — login real conectado a `POST /api/auth/login` (reemplaza el demo
+  hardcodeado "Welcome, Isabel!").
+- `features/proyectos` — placeholder honesto (sin datos ni funcionalidad inventada) hasta que
+  el CRUD de proyectos esté implementado en el backend.
+
+**`PathLocationStrategy` en vez de `HashLocationStrategy`.** El template trae por defecto
+rutas con `#/` (pensado para hosting estático tipo GitHub Pages). Se quitó ese override: la
+app se sirve desde nuestro propio nginx, así que tiene sentido usar rutas normales. Esto
+exige un `try_files` de fallback en la config de nginx para que rutas como `/proyectos`
+resueltas del lado del cliente no devuelvan 404 al refrescar — ver `frontend/nginx.conf`.
+
+**Archivos de entorno (`environment.ts` / `environment.prod.ts`).** Cumplen el requisito 6.1
+de configuración externa sin URLs embebidas en componentes/servicios: `apiUrl` y `signalRUrl`
+viven en un único lugar y se inyectan por `import { environment } from '...'`. Importante:
+Angular resuelve estos archivos en **tiempo de compilación** (vía `fileReplacements` en
+`angular.json`, que el template no traía configurado y se agregó), no en runtime del
+contenedor — a diferencia del backend, acá no hay variables de entorno de Docker que
+sustituyan estos valores después del build. Si cambian los puertos/hosts, hay que editar
+`environment.prod.ts` y reconstruir la imagen. `.env` documenta los valores esperados
+(`API_URL`, `SIGNALR_URL`) para que ambos queden sincronizados.
+
+**Frontend dockerizado con build multi-stage + nginx.** `frontend/Dockerfile` compila con
+`ng build --configuration production` en una etapa `node:20-alpine` y sirve el resultado con
+`nginx:alpine`, con `frontend/nginx.conf` agregando el `try_files` de SPA mencionado arriba.

@@ -38,23 +38,16 @@ services:
     ports:
       - "${API_PORT}:8080"
 
-  # NOTA: se agrega en el día de scaffolding del frontend (ver docs/decisiones.md).
-  # Servirá el build de producción de Angular con nginx, leyendo la URL de la Api
-  # y del hub de SignalR desde environment.prod.ts (generado en build time), nunca
-  # embebida en componentes/servicios (requisito 6.1).
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #     args:
-  #       API_URL: ${API_URL}
-  #       SIGNALR_URL: ${SIGNALR_URL}
-  #   container_name: scrumboard-frontend
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - api
-  #   ports:
-  #     - "${FRONTEND_PORT}:80"
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: scrumboard-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${FRONTEND_PORT}:80"
 
 volumes:
   scrumboard_pgdata:

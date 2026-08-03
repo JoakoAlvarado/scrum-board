@@ -10,15 +10,18 @@ Excel. Desarrollado como prueba técnica para IDEASGROUP (proceso IDEASGROUP-REM
 |---|---|
 | API .NET 8 (arquitectura hexagonal) | OK |
 | PostgreSQL 16 (Docker) | OK healthy |
-| Docker Compose (db + api) | OK |
+| Docker Compose (db + api + frontend) | OK |
 | EF Core — migración `InitialCreate` | OK aplicada |
 | Tablas en base de datos | OK verificadas |
 | Seed de usuarios iniciales | OK |
-| Autenticación JWT + BCrypt/Pepper | OK login verificado |
+| Autenticación JWT + BCrypt/Pepper (backend) | OK login verificado |
 | Swagger | OK |
 | CORS | OK configurado para el frontend |
-| Frontend Angular + PrimeNG Sakai | Pendiente en desarrollo |
-| Tiempo real (SignalR), reportes (PDF/Excel) | Pendiente pendiente |
+| Frontend Angular 17 + PrimeNG Sakai (scaffold, tema, layout) | OK |
+| Frontend — login real conectado a la Api | OK |
+| Frontend — guard de ruta + interceptor JWT | OK |
+| Frontend — CRUD de Proyectos/Columnas/Tareas, tablero kanban | ⏳ pendiente |
+| Tiempo real (SignalR), reportes (PDF/Excel) | ⏳ pendiente |
 
 > Bitácora de decisiones técnicas: [`docs/decisiones.md`](docs/decisiones.md).
 
@@ -34,7 +37,7 @@ Excel. Desarrollado como prueba técnica para IDEASGROUP (proceso IDEASGROUP-REM
 | Componente | Tecnología |
 |---|---|
 | Backend | .NET 8, C#, arquitectura hexagonal (Domain / Application / Infrastructure / Api) |
-| Frontend | Angular 17, PrimeNG (plantilla Sakai), TypeScript, SCSS |
+| Frontend | Angular 17, PrimeNG 17 (plantilla Sakai, tag `17.0.0`), TypeScript, SCSS |
 | Persistencia | PostgreSQL + Entity Framework Core (migraciones incrementales) |
 | Reporte PDF | QuestPDF |
 | Reporte Excel | ClosedXML |
@@ -99,11 +102,23 @@ docker compose logs --tail=200 api
 
 ### Acceso
 
+- **Frontend:** http://localhost:4200 — pantalla de login; tras autenticarse redirige a
+  `/proyectos`.
 - **Api:** http://localhost:8080
 - **Swagger:** http://localhost:8080/swagger *(habilitado porque `ASPNETCORE_ENVIRONMENT=Development`)*
 - **PostgreSQL:** `localhost:5432` — base `scrumboard`, usuario `scrumboard_user` *(password:
   ver `.env`, no se documenta en texto público)*
-- **Frontend:** http://localhost:4200 *(pendiente de incorporar al compose)*
+
+### Correr el frontend fuera de Docker (desarrollo con hot-reload)
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Sirve en http://localhost:4200 con `ng serve` apuntando a `environment.ts` (Api en
+`http://localhost:8080/api`, definida en `frontend/src/environments/`).
 
 ### Usuario de desarrollo/demo
 
@@ -132,7 +147,15 @@ scrum-board/
 │   │   └── ScrumBoard.Api/             → controllers, Program.cs, appsettings.json, Dockerfile
 │   └── tests/
 │       └── ScrumBoard.Application.Tests/
-├── frontend/                            → Angular 17 + PrimeNG Sakai (en progreso)
+├── frontend/                            → Angular 17 + PrimeNG Sakai (tag 17.0.0)
+│   ├── Dockerfile, nginx.conf
+│   └── src/app/
+│       ├── core/                        → AuthService, authGuard, AuthInterceptor
+│       ├── features/
+│       │   ├── auth/login/              → login real conectado a la Api
+│       │   └── proyectos/                → placeholder, CRUD pendiente
+│       ├── shared/not-found/
+│       └── layout/                      → chrome de Sakai (topbar, sidebar, menú, footer)
 ├── docs/
 │   └── decisiones.md                    → decisiones técnicas permanentes
 ├── docker-compose.yml                   → en la raíz (no dentro de backend/)
@@ -233,17 +256,18 @@ afecta el desarrollo del challenge, pero en un entorno productivo real esas clav
 persistirse fuera del contenedor (volumen, almacenamiento externo o Azure Key Vault, según el
 proveedor).
 
-## Información para desarrollar el frontend
+## Frontend — estado y próximos pasos
 
-- Base URL de la Api: `http://localhost:8080` (configurable vía `API_URL` en `.env`, se debe
-  leer desde `environment.ts` en Angular, nunca embebida en componentes/servicios).
-- Login: `POST /api/auth/login` con `{ email, password }`, devuelve `{ usuarioId, nombre,
-  email, token, expiraUtc }`.
-- El resto de los endpoints de negocio (proyectos, columnas, tareas) están protegidos con JWT
-  Bearer y todavía no están implementados — ver estado actual arriba y el plan de ejecución.
-- CORS ya admite `http://localhost:4200` como origen por defecto.
-- El canal de tiempo real (SignalR) todavía no está implementado; la URL reservada para eso es
-  `SIGNALR_URL` en `.env`.
+- Scaffold de Angular 17 + PrimeNG Sakai (tag `17.0.0`) operativo, tema `lara-light-blue`
+  fijo, sin selector de temas (ver `docs/decisiones.md`).
+- Login real contra `POST /api/auth/login`; `AuthService` guarda el JWT y el usuario en
+  `localStorage`; `authGuard` protege las rutas del layout principal; `AuthInterceptor`
+  adjunta el `Authorization: Bearer` a cada request y desloguea automáticamente ante un 401.
+- `environment.ts` / `environment.prod.ts` (en `frontend/src/environments/`) centralizan
+  `apiUrl` y `signalRUrl` — nunca hardcodeados en componentes o servicios.
+- `features/proyectos` es un placeholder (sin datos ni funcionalidad inventada): el CRUD real
+  de proyectos, columnas, tareas y el tablero kanban con drag & drop y SignalR se implementan
+  en los próximos pasos del plan de ejecución.
 
 
 
