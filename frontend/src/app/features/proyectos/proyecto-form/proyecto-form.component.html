@@ -1,0 +1,42 @@
+<p-dialog [(visible)]="visible" (visibleChange)="visibleChange.emit($event)"
+          [modal]="true" [style]="{width: '32rem'}"
+          [header]="esEdicion ? 'Editar proyecto' : 'Nuevo proyecto'">
+    <form [formGroup]="form" (ngSubmit)="guardar()" class="flex flex-column gap-3 pt-2">
+        <div>
+            <label for="nombre" class="block font-medium mb-1">Nombre *</label>
+            <input id="nombre" type="text" pInputText formControlName="nombre" class="w-full" />
+            <small class="p-error" *ngIf="form.get('nombre')?.invalid && form.get('nombre')?.touched">
+                El nombre es obligatorio.
+            </small>
+        </div>
+
+        <div>
+            <label for="descripcion" class="block font-medium mb-1">Descripción</label>
+            <textarea id="descripcion" pInputTextarea formControlName="descripcion" rows="3" class="w-full"></textarea>
+        </div>
+
+        <div class="flex gap-3">
+            <div class="flex-1">
+                <label for="fechaInicio" class="block font-medium mb-1">Fecha de inicio *</label>
+                <p-calendar id="fechaInicio" formControlName="fechaInicio" dateFormat="dd/mm/yy"
+                            styleClass="w-full" [showIcon]="true"></p-calendar>
+            </div>
+            <div class="flex-1">
+                <label for="fechaFin" class="block font-medium mb-1">Fecha de fin prevista *</label>
+                <p-calendar id="fechaFin" formControlName="fechaFinPrevista" dateFormat="dd/mm/yy"
+                            styleClass="w-full" [showIcon]="true"></p-calendar>
+            </div>
+        </div>
+
+        <div *ngIf="esEdicion">
+            <label for="estado" class="block font-medium mb-1">Estado</label>
+            <p-dropdown id="estado" formControlName="estado" [options]="estados"
+                        optionLabel="label" optionValue="value" styleClass="w-full"></p-dropdown>
+        </div>
+    </form>
+
+    <ng-template pTemplate="footer">
+        <button pButton type="button" label="Cancelar" class="p-button-text" (click)="cerrar()"></button>
+        <button pButton type="button" label="Guardar" icon="pi pi-check" [loading]="guardando" (click)="guardar()"></button>
+    </ng-template>
+</p-dialog>

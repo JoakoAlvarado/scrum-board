@@ -1,14 +1,66 @@
 <div class="card">
-    <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
         <h5 class="m-0">Proyectos</h5>
-        <button pButton pRipple label="Nuevo proyecto" icon="pi pi-plus" [disabled]="true"
-                pTooltip="Disponible cuando el CRUD de proyectos esté conectado a la Api"
-                tooltipPosition="left"></button>
+        <div class="flex align-items-center gap-2">
+            <span class="p-input-icon-left">
+                <i class="pi pi-search"></i>
+                <input type="text" pInputText placeholder="Buscar por nombre..."
+                       [ngModel]="filtroNombre" (ngModelChange)="onFiltroChange($event)" />
+            </span>
+            <button pButton pRipple label="Nuevo proyecto" icon="pi pi-plus" (click)="nuevoProyecto()"></button>
+        </div>
     </div>
 
-    <div class="flex flex-column align-items-center justify-content-center py-8 text-600">
-        <i class="pi pi-folder-open text-4xl mb-3"></i>
-        <p class="m-0">Todavía no hay proyectos cargados.</p>
-        <p class="m-0 text-sm">El listado, alta, edición y eliminación se conectan a la Api en el próximo paso del plan.</p>
-    </div>
+    <p-table [value]="proyectos" [lazy]="true" (onLazyLoad)="onPageChange($event)"
+             [paginator]="true" [rows]="tamanioPagina" [totalRecords]="total" [loading]="cargando"
+             [rowsPerPageOptions]="[10, 20, 50]" responsiveLayout="scroll">
+        <ng-template pTemplate="header">
+            <tr>
+                <th>Nombre</th>
+                <th>Estado</th>
+                <th>Fecha inicio</th>
+                <th>Fecha fin prevista</th>
+                <th>Columnas</th>
+                <th>Tareas</th>
+                <th style="width: 10rem"></th>
+            </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-proyecto>
+            <tr>
+                <td>
+                    <a class="cursor-pointer font-medium text-primary" (click)="abrirTablero(proyecto)">
+                        {{ proyecto.nombre }}
+                    </a>
+                </td>
+                <td><p-tag [value]="proyecto.estado"></p-tag></td>
+                <td>{{ proyecto.fechaInicio | date:'dd/MM/yyyy' }}</td>
+                <td>{{ proyecto.fechaFinPrevista | date:'dd/MM/yyyy' }}</td>
+                <td>{{ proyecto.cantidadColumnas }}</td>
+                <td>{{ proyecto.cantidadTareas }}</td>
+                <td>
+                    <div class="flex gap-2 justify-content-end">
+                        <button pButton pRipple icon="pi pi-table" class="p-button-text p-button-sm"
+                                pTooltip="Abrir tablero" (click)="abrirTablero(proyecto)"></button>
+                        <button pButton pRipple icon="pi pi-pencil" class="p-button-text p-button-sm"
+                                pTooltip="Editar" (click)="editarProyecto(proyecto)"></button>
+                        <button pButton pRipple icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
+                                pTooltip="Eliminar" (click)="eliminarProyecto(proyecto)"></button>
+                    </div>
+                </td>
+            </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+            <tr>
+                <td colspan="7" class="text-center text-600 py-5">
+                    No hay proyectos cargados todavía.
+                </td>
+            </tr>
+        </ng-template>
+    </p-table>
 </div>
+
+<app-proyecto-form [(visible)]="dialogoVisible" [proyecto]="proyectoSeleccionado"
+                    (guardado)="cargar()"></app-proyecto-form>
+
+<p-confirmDialog></p-confirmDialog>
+<p-toast></p-toast>

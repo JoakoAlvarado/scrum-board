@@ -1,0 +1,39 @@
+<p-dialog [(visible)]="visible" (visibleChange)="visibleChange.emit($event)"
+          [modal]="true" [style]="{width: '30rem'}"
+          [header]="esEdicion ? 'Editar tarea' : 'Nueva tarea'">
+    <form [formGroup]="form" (ngSubmit)="guardar()" class="flex flex-column gap-3 pt-2">
+        <div>
+            <label for="titulo" class="block font-medium mb-1">Título *</label>
+            <input id="titulo" type="text" pInputText formControlName="titulo" class="w-full" />
+            <small class="p-error" *ngIf="form.get('titulo')?.invalid && form.get('titulo')?.touched">
+                El título es obligatorio.
+            </small>
+        </div>
+
+        <div>
+            <label for="descripcion" class="block font-medium mb-1">Descripción</label>
+            <textarea id="descripcion" pInputTextarea formControlName="descripcion" rows="3" class="w-full"></textarea>
+        </div>
+
+        <div>
+            <label for="prioridad" class="block font-medium mb-1">Prioridad *</label>
+            <p-dropdown id="prioridad" formControlName="prioridad" [options]="prioridades"
+                        optionLabel="label" optionValue="value" styleClass="w-full"></p-dropdown>
+        </div>
+
+        <div>
+            <label for="responsable" class="block font-medium mb-1">Responsable *</label>
+            <p-dropdown id="responsable" formControlName="responsableId" [options]="usuarios"
+                        optionLabel="nombre" optionValue="id" styleClass="w-full"
+                        placeholder="Seleccioná un responsable"></p-dropdown>
+            <small class="p-error" *ngIf="form.get('responsableId')?.invalid && form.get('responsableId')?.touched">
+                El responsable es obligatorio.
+            </small>
+        </div>
+    </form>
+
+    <ng-template pTemplate="footer">
+        <button pButton type="button" label="Cancelar" class="p-button-text" (click)="cerrar()"></button>
+        <button pButton type="button" label="Guardar" icon="pi pi-check" [loading]="guardando" (click)="guardar()"></button>
+    </ng-template>
+</p-dialog>

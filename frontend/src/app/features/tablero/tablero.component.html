@@ -1,0 +1,98 @@
+<div class="flex align-items-center justify-content-between mb-3 flex-wrap gap-3">
+    <div class="flex align-items-center gap-3">
+        <button pButton pRipple icon="pi pi-arrow-left" class="p-button-text" (click)="volver()"></button>
+        <h5 class="m-0">{{ proyecto?.nombre }}</h5>
+    </div>
+
+    <div class="flex align-items-center gap-2 flex-wrap">
+        <span class="p-input-icon-left">
+            <i class="pi pi-search"></i>
+            <input type="text" pInputText placeholder="Buscar tarea..." [(ngModel)]="filtroTexto" />
+        </span>
+        <p-dropdown [options]="prioridades" [(ngModel)]="filtroPrioridad" optionLabel="label" optionValue="value"
+                    placeholder="Prioridad" [showClear]="true" styleClass="w-10rem"></p-dropdown>
+        <p-dropdown [options]="usuarios" [(ngModel)]="filtroResponsableId" optionLabel="nombre" optionValue="id"
+                    placeholder="Responsable" [showClear]="true" styleClass="w-12rem"></p-dropdown>
+    </div>
+</div>
+
+<small *ngIf="hayFiltroActivo" class="block mb-3 text-600">
+    <i class="pi pi-info-circle mr-1"></i>
+    Con un filtro activo el tablero solo se puede consultar; quitá el filtro para arrastrar y reordenar tareas o columnas.
+</small>
+
+<div *ngIf="cargando" class="flex justify-content-center py-8">
+    <p-progressSpinner styleClass="w-3rem h-3rem"></p-progressSpinner>
+</div>
+
+<div *ngIf="!cargando" cdkDropList cdkDropListOrientation="horizontal" [cdkDropListData]="columnasVista"
+     (cdkDropListDropped)="onDropColumna($event)" class="flex gap-3 align-items-start overflow-x-auto pb-3">
+
+    <div *ngFor="let cv of columnasVista" cdkDrag [cdkDragDisabled]="hayFiltroActivo"
+         class="surface-card border-round p-3 flex-shrink-0" style="width: 300px">
+
+        <div class="flex align-items-center justify-content-between mb-3" cdkDragHandle>
+            <ng-container *ngIf="columnaEnEdicionId !== cv.columna.id; else edicionTemplate">
+                <span class="font-medium cursor-move" (dblclick)="iniciarEdicionColumna(cv.columna)">
+                    {{ cv.columna.nombre }}
+                    <span class="text-600 text-sm">({{ cv.tareas.length }})</span>
+                </span>
+            </ng-container>
+            <ng-template #edicionTemplate>
+                <input type="text" pInputText class="w-full" [(ngModel)]="nombreColumnaEdicion"
+                       (blur)="confirmarEdicionColumna(cv.columna)"
+                       (keyup.enter)="confirmarEdicionColumna(cv.columna)" />
+            </ng-template>
+
+            <div class="flex gap-1">
+                <button pButton pRipple icon="pi pi-pencil" class="p-button-text p-button-sm"
+                        (click)="iniciarEdicionColumna(cv.columna)"></button>
+                <button pButton pRipple icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
+                        (click)="eliminarColumna(cv)"></button>
+            </div>
+        </div>
+
+        <div cdkDropList [id]="'columna-' + cv.columna.id" [cdkDropListData]="cv.tareas"
+             [cdkDropListConnectedTo]="idsColumnasParaConexion" [cdkDropListDisabled]="hayFiltroActivo"
+             (cdkDropListDropped)="onDropTarea($event, cv)" class="flex flex-column gap-2" style="min-height: 3rem">
+
+            <div *ngFor="let tarea of cv.tareas" cdkDrag [cdkDragDisabled]="hayFiltroActivo"
+                 [hidden]="!coincideFiltro(tarea)"
+                 class="surface-ground border-round p-3 cursor-pointer" (click)="editarTarea(tarea)">
+                <div class="flex align-items-start justify-content-between gap-2">
+                    <span class="font-medium">{{ tarea.titulo }}</span>
+                    <button pButton pRipple icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
+                            (click)="eliminarTarea(tarea); $event.stopPropagation()"></button>
+                </div>
+                <p *ngIf="tarea.descripcion" class="text-sm text-600 mt-1 mb-2 line-height-3">{{ tarea.descripcion }}</p>
+                <div class="flex align-items-center justify-content-between mt-2">
+                    <p-tag [value]="tarea.prioridad"
+                           [severity]="tarea.prioridad === 'Urgente' ? 'danger' : tarea.prioridad === 'Alta' ? 'warning' : tarea.prioridad === 'Media' ? 'success' : 'info'">
+                    </p-tag>
+                    <span class="text-sm text-600">
+                        <i class="pi pi-user mr-1"></i>{{ obtenerNombreUsuario(tarea.responsableId) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <button pButton pRipple label="Agregar tarea" icon="pi pi-plus" class="p-button-text w-full mt-2"
+                (click)="nuevaTarea(cv.columna.id)"></button>
+    </div>
+
+    <div class="surface-card border-round p-3 flex-shrink-0" style="width: 260px">
+        <span class="font-medium block mb-2">Nueva columna</span>
+        <div class="flex gap-2">
+            <input type="text" pInputText class="w-full" placeholder="Nombre de la columna"
+                   [(ngModel)]="nuevaColumnaNombre" (keyup.enter)="agregarColumna()" />
+            <button pButton pRipple icon="pi pi-plus" [loading]="agregandoColumna" (click)="agregarColumna()"></button>
+        </div>
+    </div>
+</div>
+
+<app-tarea-form [(visible)]="dialogoTareaVisible" [proyectoId]="proyectoId" [tarea]="tareaSeleccionada"
+                [columnaId]="columnaDestinoNuevaTarea" [usuarios]="usuarios"
+                (guardado)="cargarTodo()"></app-tarea-form>
+
+<p-confirmDialog></p-confirmDialog>
+<p-toast></p-toast>

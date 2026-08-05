@@ -14,7 +14,8 @@ import { authGuard } from './core/guards/auth.guard';
                     canActivate: [authGuard],
                     children: [
                         { path: '', redirectTo: 'proyectos', pathMatch: 'full' },
-                        { path: 'proyectos', loadChildren: () => import('./features/proyectos/proyectos.module').then((m) => m.ProyectosModule) }
+                        { path: 'proyectos', loadChildren: () => import('./features/proyectos/proyectos.module').then((m) => m.ProyectosModule) },
+                        { path: 'proyectos/:id/tablero', loadChildren: () => import('./features/tablero/tablero.module').then((m) => m.TableroModule) }
                     ]
                 },
                 { path: 'auth', loadChildren: () => import('./features/auth/auth.module').then((m) => m.AuthModule) },
