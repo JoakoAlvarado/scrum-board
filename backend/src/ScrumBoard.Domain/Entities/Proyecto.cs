@@ -64,6 +64,27 @@ public class Proyecto
         _columnas.Remove(columna);
     }
 
+    public void RenombrarColumna(Guid columnaId, string nuevoNombre)
+    {
+        var columna = _columnas.FirstOrDefault(c => c.Id == columnaId)
+            ?? throw new DomainException("La columna no pertenece a este proyecto.");
+
+        columna.Renombrar(nuevoNombre);
+    }
+
+    /// <summary>
+    /// Reordena una columna dentro del tablero. <paramref name="nuevoOrden"/> se calcula
+    /// previamente con <see cref="Services.CalculadorDeOrden.CalcularOrden"/> a partir de
+    /// las columnas vecinas.
+    /// </summary>
+    public void ReordenarColumna(Guid columnaId, decimal nuevoOrden)
+    {
+        var columna = _columnas.FirstOrDefault(c => c.Id == columnaId)
+            ?? throw new DomainException("La columna no pertenece a este proyecto.");
+
+        columna.CambiarOrden(nuevoOrden);
+    }
+
     // --- Tareas: se valida siempre que la columna pertenezca a este mismo proyecto,
     // manteniendo consistente el campo denormalizado Tarea.ProyectoId ---
 
@@ -92,6 +113,22 @@ public class Proyecto
             ?? throw new DomainException("La tarea no pertenece a este proyecto.");
 
         tarea.MoverA(columnaDestinoId, nuevoOrden);
+    }
+
+    public void EditarTarea(Guid tareaId, string titulo, string descripcion, Prioridad prioridad, Guid responsableId)
+    {
+        var tarea = _tareas.FirstOrDefault(t => t.Id == tareaId)
+            ?? throw new DomainException("La tarea no pertenece a este proyecto.");
+
+        tarea.Editar(titulo, descripcion, prioridad, responsableId);
+    }
+
+    public void EliminarTarea(Guid tareaId)
+    {
+        var tarea = _tareas.FirstOrDefault(t => t.Id == tareaId)
+            ?? throw new DomainException("La tarea no pertenece a este proyecto.");
+
+        _tareas.Remove(tarea);
     }
 
     private static void ValidarFechas(DateTime fechaInicio, DateTime fechaFinPrevista)

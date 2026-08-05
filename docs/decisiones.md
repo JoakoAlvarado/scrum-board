@@ -165,3 +165,105 @@ token que devuelve `/api/auth/login` en el botón "Authorize".
 
 **Sin cambios de esquema de base de datos.** El CRUD de Proyectos usa las entidades y la
 migración `InitialCreate` ya existentes desde el día 1 — no hizo falta una migración nueva.
+
+## CRUD de Columnas y Tareas (backend)
+
+**Sin `IColumnaRepository` ni `ITareaRepository`.** Ni Columna ni Tarea son raíces de
+agregado — son entidades hijas de `Proyecto` (ver decisión del día 1). Todas sus operaciones
+pasan por `IProyectoRepository` (cargando el agregado completo con
+`ObtenerConTableroAsync`) y los métodos del propio `Proyecto`. `ColumnaService` y
+`TareaService` no tienen su propio repositorio.
+
+**Mutadores de `Columna`/`Tarea` marcados `internal`.** `Renombrar`, `CambiarOrden` (en
+`Columna`) y `Editar` (en `Tarea`) pasaron de `public` a `internal`: solo se pueden invocar
+desde dentro del ensamblado `ScrumBoard.Domain`, en la práctica solo desde los métodos del
+agregado `Proyecto` (`RenombrarColumna`, `ReordenarColumna`, `EditarTarea`, `EliminarTarea`,
+agregados en este paso). Objetivo: que **toda** mutación de columnas/tareas tenga un único
+punto de entrada auditable, sin excepciones — ni siquiera Application puede mutarlas
+"por el costado" llamando directo a la entidad hija.
+
+**El cálculo de la nueva posición vive en Application, no en el agregado.** `ColumnaService`
+y `TareaService` buscan los vecinos (por id, dentro del agregado ya cargado en memoria),
+llaman a `CalculadorDeOrden.CalcularOrden` (dominio puro, sin dependencias) y recién con el
+valor ya calculado invocan `Proyecto.ReordenarColumna`/`MoverTarea`. El agregado nunca
+recibe "muévase entre estos dos ids": recibe directamente el `decimal` ya calculado. Mantiene
+al agregado simple y a `CalculadorDeOrden` testeable de forma aislada (como ya lo estaba desde
+el día 1).
+
+**Al mover una tarea, los vecinos se buscan dentro de la columna destino.** Una tarea puede
+estar cambiando de columna en el mismo movimiento; buscar el vecino "por id en todo el
+proyecto" sin filtrar por columna sería un bug (podría encontrar una tarea con ese id en la
+columna equivocada). `TareaService.ObtenerOrdenTareaEnColumnaDestino` filtra explícitamente
+por `ColumnaDestinoId`.
+
+**Alta de columna/tarea siempre al final.** Nueva columna o tarea usa
+`CalculadorDeOrden.CalcularOrden(ultimoOrden, null)` — mismo algoritmo que el reordenamiento,
+sin caso especial para "alta".
+
+**Se valida que el `ResponsableId` exista antes de crear/editar una tarea.** Sin esto, un id
+inválido solo se detectaría en `SaveChangesAsync` como una violación de foreign key de
+PostgreSQL — un error 500 genérico y poco claro. `TareaService` valida contra
+`IUsuarioRepository` primero y devuelve un 404 explícito ("Usuario con id... no fue
+encontrado").
+
+**Nuevo endpoint de solo lectura `GET /api/usuarios`.** No está en el modelo de dominio
+mínimo del enunciado, pero sin una forma de listar los usuarios precargados, el frontend no
+tendría cómo poblar el selector de "responsable" al crear/editar una tarea (requisito 6.5).
+Se agregó `IUsuarioRepository.ListarTodosAsync` + `UsuarioService` + `UsuariosController`,
+sin alta/edición/baja de usuarios (fuera de alcance del challenge).
+
+**Sin cambios de esquema de base de datos** (de nuevo): Columna y Tarea ya estaban modeladas
+y migradas desde el día 1; este paso fue enteramente de Application/Api.
+
+## Nivelación del frontend: CRUD de Proyectos y Tablero Kanban
+
+**Bug real encontrado al integrar: enums viajaban como número, no como texto.**
+`System.Text.Json` serializa `enum` como su valor numérico por defecto; el frontend (por
+diseño, ver modelos en `core/models/`) espera/envía `Prioridad`/`EstadoProyecto` como string
+(`"Media"`, `"Planificado"`). Se agregó `JsonStringEnumConverter` en `Program.cs`
+(`AddControllers().AddJsonOptions(...)`). Importante: esto es independiente de
+`.HasConversion<string>()` en las configuraciones de EF Core — esa conversión controla cómo
+se guarda el enum en PostgreSQL; el converter de `AddJsonOptions` controla cómo viaja en el
+JSON de la Api. Son dos serializadores distintos para dos capas distintas.
+
+**Los componentes de formulario (`proyecto-form`, `tarea-form`) se guardan a sí mismos.**
+En vez de que el componente padre reciba los datos del formulario y haga el `POST`/`PUT`, el
+propio diálogo llama al servicio HTTP y emite `(guardado)` recién cuando la petición
+resuelve. El padre solo necesita reaccionar a `(guardado)` recargando su listado — no conoce
+la forma del payload ni maneja el estado de carga/error del formulario. Mismo patrón para
+ambos formularios, así que es fácil de reconocer y replicar si se agrega un tercero.
+
+**Los filtros del tablero deshabilitan el drag & drop mientras están activos.** El cálculo de
+"vecino anterior/siguiente" para el reordenamiento fraccionario (`CalculadorDeOrden` en el
+backend) asume que el índice dentro del array **completo** de la columna coincide con el
+índice visual. Ocultar tarjetas filtradas con `*ngIf` rompería esa correspondencia (el índice
+visual ya no sería el índice real). En vez de resolverlo con una estructura paralela
+filtrada + lógica de mapeo de índices — complejidad innecesaria para un requisito opcional
+(7, filtros) que no puede comprometer uno obligatorio (6.6, drag & drop) —, se optó por
+deshabilitar `cdkDrag`/`cdkDropList` (`[cdkDragDisabled]`/`[cdkDropListDisabled]`) mientras
+`hayFiltroActivo`, con un aviso visible en la UI. Las tarjetas filtradas se ocultan con
+`[hidden]` (no `*ngIf`), así siguen "ocupando su lugar" en la lista de CDK sin alterar
+índices cuando el usuario vuelve a habilitar el drag quitando el filtro.
+
+**Filtros resueltos en el cliente, no contra la Api.** El tablero ya trae todas las tareas
+del proyecto en memoria para poder renderizar el Kanban completo (no tiene sentido paginar un
+tablero). Filtrar por texto/prioridad/responsable localmente evita una ida y vuelta a la Api
+por cada tecla escrita, aunque el backend también soporta estos mismos filtros por
+querystring (`GET /api/proyectos/{id}/tareas?...`) para el caso en que se necesiten resueltos
+en el servidor (por ejemplo, si más adelante el tablero pagina).
+
+**Reversión ante error: resincronizar contra el servidor, no revertir el array a mano.**
+Si `mover`/`reordenar` falla, se llama a `cargarTodo()` en vez de deshacer manualmente el
+`moveItemInArray`/`transferArrayItem` ya aplicado de forma optimista. Es una reversión más
+simple y más confiable (siempre termina reflejando el estado real de la base de datos) a
+costa de un round-trip extra solo en el caso de error, que no es el camino feliz.
+
+**Alta de columna/tarea siempre recarga el tablero completo tras guardar**, en vez de
+insertar el nuevo elemento a mano en el array local. Evita tener que replicar en el
+frontend la lógica de "dónde cae la nueva columna/tarea" cuando el backend ya la calculó
+(orden fraccionario) — se confía en la respuesta de la Api como fuente de verdad.
+
+**`GET /api/usuarios` se consume tal cual** para poblar el `p-dropdown` de responsable en
+`tarea-form`, y para mostrar el nombre del responsable en cada tarjeta del tablero
+(`obtenerNombreUsuario`, resuelto en memoria contra la lista ya cargada — sin un `GET` por
+tarjeta).

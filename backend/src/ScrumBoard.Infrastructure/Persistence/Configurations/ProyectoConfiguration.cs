@@ -11,6 +11,7 @@ public class ProyectoConfiguration : IEntityTypeConfiguration<Proyecto>
         builder.ToTable("proyectos");
 
         builder.HasKey(p => p.Id);
+        builder.Property(p => p.Id).ValueGeneratedNever();
 
         builder.Property(p => p.Nombre).HasMaxLength(200).IsRequired();
         builder.Property(p => p.Descripcion).HasMaxLength(2000);

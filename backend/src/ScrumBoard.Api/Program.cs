@@ -35,6 +35,9 @@ builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 // --- Casos de uso (Application) ---
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProyectoService, ProyectoService>();
+builder.Services.AddScoped<IColumnaService, ColumnaService>();
+builder.Services.AddScoped<ITareaService, TareaService>();
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 
 // --- Autenticación JWT ---
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SeccionConfig);
@@ -94,7 +97,15 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Los enums (Prioridad, EstadoProyecto) viajan como texto ("Media", "Planificado"),
+        // no como número — así el frontend no necesita mapear índices arbitrarios y los
+        // payloads son legibles en Swagger/DevTools. Sin esto, System.Text.Json serializa
+        // enums como int por defecto, lo cual no coincide con lo que espera Angular.
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {

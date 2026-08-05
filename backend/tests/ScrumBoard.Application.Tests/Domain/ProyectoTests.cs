@@ -50,4 +50,37 @@ public class ProyectoTests
         accion.Should().Throw<DomainException>(
             because: "mantiene consistente el campo denormalizado Tarea.ProyectoId");
     }
+
+    [Fact]
+    public void EliminarTarea_la_quita_del_proyecto()
+    {
+        var proyecto = CrearProyecto();
+        var columna = proyecto.AgregarColumna("To Do", 1024m);
+        var tarea = proyecto.AgregarTarea(columna.Id, "Tarea 1", "desc", Prioridad.Media, Guid.NewGuid(), 1024m);
+
+        proyecto.EliminarTarea(tarea.Id);
+
+        proyecto.Tareas.Should().NotContain(t => t.Id == tarea.Id);
+    }
+
+    [Fact]
+    public void EliminarTarea_de_un_id_inexistente_lanza_excepcion()
+    {
+        var proyecto = CrearProyecto();
+
+        var accion = () => proyecto.EliminarTarea(Guid.NewGuid());
+
+        accion.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void RenombrarColumna_actualiza_el_nombre()
+    {
+        var proyecto = CrearProyecto();
+        var columna = proyecto.AgregarColumna("To Do", 1024m);
+
+        proyecto.RenombrarColumna(columna.Id, "En progreso");
+
+        proyecto.Columnas.Single(c => c.Id == columna.Id).Nombre.Should().Be("En progreso");
+    }
 }

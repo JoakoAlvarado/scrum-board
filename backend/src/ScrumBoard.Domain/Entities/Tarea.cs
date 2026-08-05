@@ -41,7 +41,7 @@ public class Tarea
         FechaCreacion = DateTime.UtcNow;
     }
 
-    public void Editar(string titulo, string descripcion, Prioridad prioridad, Guid responsableId)
+    internal void Editar(string titulo, string descripcion, Prioridad prioridad, Guid responsableId)
     {
         if (string.IsNullOrWhiteSpace(titulo))
             throw new ArgumentException("El título de la tarea es obligatorio.", nameof(titulo));

@@ -20,12 +20,16 @@ Excel. Desarrollado como prueba técnica para IDEASGROUP (proceso IDEASGROUP-REM
 | Frontend Angular 17 + PrimeNG Sakai (scaffold, tema, layout) | OK |
 | Frontend — login real conectado a la Api | OK |
 | Frontend — guard de ruta + interceptor JWT | OK |
-| Frontend — CRUD de Proyectos/Columnas/Tareas, tablero kanban | pendiente |
-| Tiempo real (SignalR), reportes (PDF/Excel) | pendiente |
+| **Frontend — CRUD de Proyectos (tabla paginada + filtro + alta/edición/baja)** | OK |
+| **Frontend — Tablero Kanban (columnas + tareas, drag & drop, filtros)** | OK |
+| Frontend — Docker (nginx) | OK imagen armada |
+| Tiempo real (SignalR), reportes (PDF/Excel) | Pendiente |
 | **Backend — CRUD de Proyectos (paginado + filtro)** | OK |
 | Backend — middleware centralizado de excepciones | OK |
 | Backend — Swagger con autenticación Bearer | OK |
-| Backend — CRUD de Columnas/Tareas | pendiente |
+| **Backend — CRUD de Columnas (incluye orden y reordenamiento)** | OK |
+| **Backend — CRUD de Tareas (incluye mover/reordenar entre columnas)** | OK |
+| **Backend — endpoint de Usuarios (listado, para asignar responsable)** | OK |
 
 > Bitácora de decisiones técnicas: [`docs/decisiones.md`](docs/decisiones.md).
 
@@ -154,12 +158,15 @@ scrum-board/
 ├── frontend/                            → Angular 17 + PrimeNG Sakai (tag 17.0.0)
 │   ├── Dockerfile, nginx.conf
 │   └── src/app/
-│       ├── core/                        → AuthService, authGuard, AuthInterceptor
+│       ├── core/
+│       │   ├── models/                   → interfaces que reflejan los DTOs del backend
+│       │   └── services/                 → AuthService, ProyectoService, ColumnaService, TareaService, UsuarioService
 │       ├── features/
-│       │   ├── auth/login/              → login real conectado a la Api
-│       │   └── proyectos/                → placeholder, CRUD pendiente
+│       │   ├── auth/login/                → login real conectado a la Api
+│       │   ├── proyectos/                 → tabla paginada + filtro + alta/edición/baja
+│       │   └── tablero/                    → Kanban: columnas + tareas, drag & drop, filtros
 │       ├── shared/not-found/
-│       └── layout/                      → chrome de Sakai (topbar, sidebar, menú, footer)
+│       └── layout/                        → chrome de Sakai (topbar, sidebar, menú, footer)
 ├── docs/
 │   └── decisiones.md                    → decisiones técnicas permanentes
 ├── docker-compose.yml                   → en la raíz (no dentro de backend/)
@@ -279,18 +286,66 @@ cota. Las excepciones de negocio (`RecursoNoEncontradoException` → 404,
 traducen centralizadamente en `ExceptionHandlingMiddleware`; los controllers no repiten
 try/catch en cada acción.
 
-## Frontend — estado y próximos pasos
+## API de Columnas
 
-- Scaffold de Angular 17 + PrimeNG Sakai (tag `17.0.0`) operativo, tema `lara-light-blue`
-  fijo, sin selector de temas (ver `docs/decisiones.md`).
-- Login real contra `POST /api/auth/login`; `AuthService` guarda el JWT y el usuario en
-  `localStorage`; `authGuard` protege las rutas del layout principal; `AuthInterceptor`
-  adjunta el `Authorization: Bearer` a cada request y desloguea automáticamente ante un 401.
-- `environment.ts` / `environment.prod.ts` (en `frontend/src/environments/`) centralizan
-  `apiUrl` y `signalRUrl` — nunca hardcodeados en componentes o servicios.
-- `features/proyectos` es un placeholder (sin datos ni funcionalidad inventada): el CRUD real
-  de proyectos, columnas, tareas y el tablero kanban con drag & drop y SignalR se implementan
-  en los próximos pasos del plan de ejecución.
+Anidada bajo el proyecto. Todas requieren JWT.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/proyectos/{proyectoId}/columnas` | Listado ordenado por `Orden` |
+| `POST` | `/api/proyectos/{proyectoId}/columnas` | Alta (se agrega siempre al final del tablero) |
+| `PUT` | `/api/proyectos/{proyectoId}/columnas/{id}` | Renombrar |
+| `PUT` | `/api/proyectos/{proyectoId}/columnas/{id}/orden` | Reordenar (drag & drop); body `{ columnaAnteriorId?, columnaSiguienteId? }` |
+| `DELETE` | `/api/proyectos/{proyectoId}/columnas/{id}` | Baja — **409** si la columna todavía tiene tareas (requisito 6.4) |
+
+## API de Tareas
+
+Anidada bajo el proyecto. Todas requieren JWT.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/proyectos/{proyectoId}/tareas?columnaId=&responsableId=&prioridad=` | Listado con filtros opcionales (requisito deseable 7) |
+| `POST` | `/api/proyectos/{proyectoId}/tareas` | Alta (se agrega al final de su columna) |
+| `PUT` | `/api/proyectos/{proyectoId}/tareas/{id}` | Edición (título, descripción, prioridad, responsable) |
+| `PUT` | `/api/proyectos/{proyectoId}/tareas/{id}/mover` | Traslado entre columnas y/o reordenamiento; body `{ columnaDestinoId, tareaAnteriorId?, tareaSiguienteId? }` |
+| `DELETE` | `/api/proyectos/{proyectoId}/tareas/{id}` | Baja |
+
+El `responsableId` se valida contra la tabla de usuarios antes de crear/editar (404 si no existe).
+
+## API de Usuarios
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/usuarios` | Listado mínimo (`id`, `nombre`, `email`) para poblar el selector de responsable |
+
+No forma parte del modelo de dominio mínimo del enunciado — es un endpoint de apoyo de solo
+lectura, sin alta/edición/baja (fuera de alcance del challenge).
+
+## Frontend — funcionalidad implementada
+
+- **Proyectos** (`features/proyectos`): tabla paginada server-side (`p-table` con `lazy`),
+  filtro por nombre con debounce, alta/edición en un diálogo (`proyecto-form`), baja con
+  confirmación. Click en el nombre o ícono de tabla abre el tablero del proyecto.
+- **Tablero Kanban** (`features/tablero`, ruta `/proyectos/:id/tablero`): columnas y tareas
+  cargadas de la Api, drag & drop con Angular CDK (`@angular/cdk/drag-drop`) tanto para mover
+  tareas entre columnas/reordenarlas como para reordenar columnas. Alta/edición de tareas en
+  diálogo (`tarea-form`) con selector de responsable poblado desde `/api/usuarios`. Alta y
+  renombrado de columnas inline; baja de columna con confirmación (muestra el mensaje de la
+  Api si falla por tener tareas — requisito 6.4).
+- **Filtros del tablero** (requisito deseable 7): búsqueda por texto, por prioridad y por
+  responsable, resueltos en el cliente (los datos del tablero ya están completos en memoria).
+  Con un filtro activo se **deshabilita el drag & drop** — ver justificación en
+  `docs/decisiones.md`.
+- Todas las peticiones pasan por `AuthInterceptor` (JWT) y por los servicios de
+  `core/services/*.service.ts`, que reflejan 1:1 los DTOs/rutas del backend.
+
+## Frontend — pendiente
+
+- Tiempo real (SignalR): hoy el tablero no se sincroniza solo entre dos sesiones — hay que
+  recargar para ver cambios de otro usuario.
+- Descarga de reportes PDF/Excel (depende de que el backend los tenga implementados).
+- Indicador de usuarios conectados (deseable, depende de SignalR).
+- Tests de frontend (Karma/Jasmine).
 
 
 
@@ -301,9 +356,12 @@ generadas por EF Core, antes de la entrega final.)*
 
 ## Pruebas automatizadas
 
-Backend: `dotnet test` desde `backend/`. Incluye, entre otros, el cálculo de la nueva
-posición de una tarea al reordenarla (`CalculadorDeOrdenTests`) y las reglas de negocio del
-agregado `Proyecto` (`ProyectoTests`).
+Backend: `dotnet test` desde `backend/`. 16 tests, entre otros: el cálculo de la nueva
+posición de una tarea al reordenarla (`CalculadorDeOrdenTests`, obligatorio por 6.9), las
+reglas de negocio del agregado `Proyecto` (`ProyectoTests` — no eliminar columna con tareas,
+no mover tarea a columna de otro proyecto, eliminar/renombrar), y el flujo completo de
+creación y movimiento de tareas a través del caso de uso (`ProyectoServiceTests`,
+`TareaServiceTests`), con repositorios fake — sin EF Core ni PostgreSQL de por medio.
 
 Frontend: pendiente (Día 6 del plan de ejecución).
 

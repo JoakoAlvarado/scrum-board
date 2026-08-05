@@ -11,6 +11,7 @@ public class TareaConfiguration : IEntityTypeConfiguration<Tarea>
         builder.ToTable("tareas");
 
         builder.HasKey(t => t.Id);
+        builder.Property(t => t.Id).ValueGeneratedNever();
 
         builder.Property(t => t.Titulo).HasMaxLength(200).IsRequired();
         builder.Property(t => t.Descripcion).HasMaxLength(4000);

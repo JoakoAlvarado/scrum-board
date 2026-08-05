@@ -20,7 +20,7 @@ public class Columna
         Orden = orden;
     }
 
-    public void Renombrar(string nombre)
+    internal void Renombrar(string nombre)
     {
         if (string.IsNullOrWhiteSpace(nombre))
             throw new ArgumentException("El nombre de la columna es obligatorio.", nameof(nombre));
@@ -28,5 +28,5 @@ public class Columna
         Nombre = nombre.Trim();
     }
 
-    public void CambiarOrden(decimal nuevoOrden) => Orden = nuevoOrden;
+    internal void CambiarOrden(decimal nuevoOrden) => Orden = nuevoOrden;
 }

@@ -18,4 +18,9 @@ public class EfUsuarioRepository : IUsuarioRepository
     public Task<Usuario?> ObtenerPorIdAsync(Guid id, CancellationToken ct = default) =>
         _context.Usuarios.AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == id, ct);
+
+    public async Task<IReadOnlyList<Usuario>> ListarTodosAsync(CancellationToken ct = default) =>
+        await _context.Usuarios.AsNoTracking()
+            .OrderBy(u => u.Nombre)
+            .ToListAsync(ct);
 }

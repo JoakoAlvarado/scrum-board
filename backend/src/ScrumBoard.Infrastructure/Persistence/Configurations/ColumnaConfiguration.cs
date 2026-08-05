@@ -11,6 +11,7 @@ public class ColumnaConfiguration : IEntityTypeConfiguration<Columna>
         builder.ToTable("columnas");
 
         builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).ValueGeneratedNever();
 
         builder.Property(c => c.Nombre).HasMaxLength(150).IsRequired();
         builder.Property(c => c.Orden).HasColumnType("numeric(18,6)").IsRequired();
