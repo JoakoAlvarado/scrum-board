@@ -15,6 +15,7 @@ import { TareaService } from 'src/app/core/services/tarea.service';
 import { UsuarioService } from 'src/app/core/services/usuario.service';
 import { TableroRealtimeService } from 'src/app/core/services/tablero-realtime.service';
 import { ReporteService } from 'src/app/core/services/reporte.service';
+import { calcularVecinos } from 'src/app/core/utils/reordenamiento.util';
 
 interface ColumnaVista {
     columna: Columna;
@@ -235,16 +236,24 @@ export class TableroComponent implements OnInit, OnDestroy {
             transferArrayItem(event.previousContainer.data, event.container.data, event.previousIndex, event.currentIndex);
         }
 
-        const lista = columnaDestino.tareas;
-        const indice = lista.findIndex((t) => t.id === tareaMovida.id);
-        const anterior = lista[indice - 1]?.id ?? null;
-        const siguiente = lista[indice + 1]?.id ?? null;
+        // const lista = columnaDestino.tareas;
+        // const indice = lista.findIndex((t) => t.id === tareaMovida.id);
+        // const anterior = lista[indice - 1]?.id ?? null;
+        // const siguiente = lista[indice + 1]?.id ?? null;
 
+        const { anteriorId, siguienteId } = calcularVecinos(columnaDestino.tareas, tareaMovida.id);
+
+        // this.tareaService
+        //     .mover(this.proyectoId, tareaMovida.id, {
+        //         columnaDestinoId: columnaDestino.columna.id,
+        //         tareaAnteriorId: anterior,
+        //         tareaSiguienteId: siguiente
+        //     })
         this.tareaService
             .mover(this.proyectoId, tareaMovida.id, {
                 columnaDestinoId: columnaDestino.columna.id,
-                tareaAnteriorId: anterior,
-                tareaSiguienteId: siguiente
+                tareaAnteriorId: anteriorId,
+                tareaSiguienteId: siguienteId
             })
             .subscribe({
                 error: (err: HttpErrorResponse) => {
@@ -264,12 +273,20 @@ export class TableroComponent implements OnInit, OnDestroy {
 
         moveItemInArray(this.columnasVista, event.previousIndex, event.currentIndex);
 
-        const columnaMovida = this.columnasVista[event.currentIndex].columna;
-        const anterior = this.columnasVista[event.currentIndex - 1]?.columna.id ?? null;
-        const siguiente = this.columnasVista[event.currentIndex + 1]?.columna.id ?? null;
+        // const columnaMovida = this.columnasVista[event.currentIndex].columna;
+        // const anterior = this.columnasVista[event.currentIndex - 1]?.columna.id ?? null;
+        // const siguiente = this.columnasVista[event.currentIndex + 1]?.columna.id ?? null;
 
+        const columnaMovida = this.columnasVista[event.currentIndex].columna;
+        const { anteriorId, siguienteId } = calcularVecinos(
+            this.columnasVista.map((cv) => ({ id: cv.columna.id })),
+            columnaMovida.id
+        );
+
+        // this.columnaService
+        //     .reordenar(this.proyectoId, columnaMovida.id, { columnaAnteriorId: anterior, columnaSiguienteId: siguiente })
         this.columnaService
-            .reordenar(this.proyectoId, columnaMovida.id, { columnaAnteriorId: anterior, columnaSiguienteId: siguiente })
+            .reordenar(this.proyectoId, columnaMovida.id, { columnaAnteriorId: anteriorId, columnaSiguienteId: siguienteId })
             .subscribe({
                 error: (err: HttpErrorResponse) => {
                     this.messageService.add({

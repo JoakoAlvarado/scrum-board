@@ -393,16 +393,14 @@ explícitamente (requisito 6.7).
 
 ## Frontend — pendiente
 
-- Indicador de usuarios conectados al tablero (deseable — la infraestructura de grupos de
-  SignalR ya está lista, falta el contador en sí).
-- Tests de frontend (Karma/Jasmine).
+- Indicador de usuarios conectados al tablero (funcionalidad deseable no implementada).
 
 
 
-## Diagrama del modelo de base de datos
+## Diagrama del modelo de datos ER
 
-*(Pendiente — se incrusta como imagen en esta sección junto con las migraciones incrementales
-generadas por EF Core, antes de la entrega final.)*
+![Diagrama ER](docs/images/diagrama-er.png)
+
 
 ## Pruebas automatizadas
 
@@ -415,7 +413,22 @@ PDF/Excel reales generando bytes válidos (`ReporteExportersTests`) — estos ú
 referencia directa a `ScrumBoard.Infrastructure` (no son fakes: corren QuestPDF/ClosedXML de
 verdad, sin necesidad de una base de datos).
 
-Frontend: pendiente (Día 6 del plan de ejecución).
+Frontend: `ng test` desde `frontend/`.
+
+Se implementaron 16 pruebas automatizadas con Karma/Jasmine sobre lógica de aplicación.
+
+Incluyen:
+
+- cálculo de vecinos al reordenar tareas (requisito obligatorio 6.9);
+- filtros del tablero;
+- reordenamiento de tareas entre columnas;
+- reordenamiento de columnas;
+- actualización del tablero ante eventos en tiempo real;
+- autenticación, expiración de sesión y logout.
+
+Resultado verificado:
+
+16 specs, 0 failures
 
 ## Declaración de uso de asistentes de inteligencia artificial
 
@@ -443,6 +456,3 @@ entrevista técnica, y revisó/verificó personalmente el funcionamiento real de
 Ver el documento de planificación completo compartido junto con la entrega (7 días,
 decisiones tecnológicas y cronograma día a día).
 
-## Diagrama del modelo de datos
-
-![Diagrama ER](docs/images/diagrama-er.png)
