@@ -34,7 +34,8 @@
         "rxjs": "~7.8.1",
         "tslib": "^2.5.0",
         "zone.js": "~0.14.0",
-        "prismjs": "^1.29.0"
+        "prismjs": "^1.29.0",
+        "@microsoft/signalr": "^8.0.7"
     },
     "devDependencies": {
         "@angular-devkit/build-angular": "^17.0.5",

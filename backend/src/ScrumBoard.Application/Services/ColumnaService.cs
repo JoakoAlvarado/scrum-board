@@ -14,10 +14,12 @@ namespace ScrumBoard.Application.Services;
 public class ColumnaService : IColumnaService
 {
     private readonly IProyectoRepository _proyectoRepository;
+    private readonly IRealtimeNotifier _realtimeNotifier;
 
-    public ColumnaService(IProyectoRepository proyectoRepository)
+    public ColumnaService(IProyectoRepository proyectoRepository, IRealtimeNotifier realtimeNotifier)
     {
         _proyectoRepository = proyectoRepository;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<IReadOnlyList<ColumnaDto>> ListarAsync(Guid proyectoId, CancellationToken ct = default)
@@ -42,7 +44,10 @@ public class ColumnaService : IColumnaService
 
         await _proyectoRepository.GuardarCambiosAsync(ct);
 
-        return MapearADto(columna, proyecto);
+        var dto = MapearADto(columna, proyecto);
+        await _realtimeNotifier.NotificarColumnaCreadaAsync(proyectoId, dto, ct);
+
+        return dto;
     }
 
     public async Task<ColumnaDto> ActualizarAsync(Guid proyectoId, Guid columnaId, ActualizarColumnaRequest request, CancellationToken ct = default)
@@ -53,7 +58,10 @@ public class ColumnaService : IColumnaService
         await _proyectoRepository.GuardarCambiosAsync(ct);
 
         var columna = proyecto.Columnas.First(c => c.Id == columnaId);
-        return MapearADto(columna, proyecto);
+        var dto = MapearADto(columna, proyecto);
+        await _realtimeNotifier.NotificarColumnaActualizadaAsync(proyectoId, dto, ct);
+
+        return dto;
     }
 
     public async Task<ColumnaDto> ReordenarAsync(Guid proyectoId, Guid columnaId, ReordenarColumnaRequest request, CancellationToken ct = default)
@@ -68,7 +76,10 @@ public class ColumnaService : IColumnaService
         await _proyectoRepository.GuardarCambiosAsync(ct);
 
         var columna = proyecto.Columnas.First(c => c.Id == columnaId);
-        return MapearADto(columna, proyecto);
+        var dto = MapearADto(columna, proyecto);
+        await _realtimeNotifier.NotificarColumnaReordenadaAsync(proyectoId, dto, ct);
+
+        return dto;
     }
 
     public async Task EliminarAsync(Guid proyectoId, Guid columnaId, CancellationToken ct = default)
@@ -77,6 +88,8 @@ public class ColumnaService : IColumnaService
 
         proyecto.EliminarColumna(columnaId); // lanza DomainException si tiene tareas
         await _proyectoRepository.GuardarCambiosAsync(ct);
+
+        await _realtimeNotifier.NotificarColumnaEliminadaAsync(proyectoId, columnaId, ct);
     }
 
     private async Task<Proyecto> ObtenerProyectoOFallarAsync(Guid proyectoId, CancellationToken ct) =>

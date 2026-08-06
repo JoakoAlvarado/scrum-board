@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ScrumBoard.Domain\ScrumBoard.Domain.csproj" />
     <ProjectReference Include="..\..\src\ScrumBoard.Application\ScrumBoard.Application.csproj" />
+    <ProjectReference Include="..\..\src\ScrumBoard.Infrastructure\ScrumBoard.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

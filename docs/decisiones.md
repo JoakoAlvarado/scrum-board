@@ -267,3 +267,94 @@ frontend la lógica de "dónde cae la nueva columna/tarea" cuando el backend ya 
 `tarea-form`, y para mostrar el nombre del responsable en cada tarjeta del tablero
 (`obtenerNombreUsuario`, resuelto en memoria contra la lista ya cargada — sin un `GET` por
 tarjeta).
+
+## Tiempo real (SignalR)
+
+**El adaptador `SignalRRealtimeNotifier` vive en Api, no en Infrastructure.** Necesita
+`IHubContext<TableroHub>`, disponible de forma nativa en un proyecto `Microsoft.NET.Sdk.Web`
+sin agregar ningún paquete NuGet extra. Ponerlo en Infrastructure hubiera exigido referenciar
+`Microsoft.AspNetCore.SignalR.Core` ahí solo para este adaptador — más dependencias sin
+necesidad real. `Application` solo conoce el puerto `IRealtimeNotifier` (agregado ya el
+día 1); ni Domain ni Application saben que existe SignalR.
+
+**Se tipó `IRealtimeNotifier` con los DTOs reales (`TareaDto`/`ColumnaDto`), no `object`.**
+El puerto se había dejado con `object payload` el día 1 porque los DTOs de Columna/Tarea
+todavía no existían. Ahora que existen, tipar el contrato da chequeo de tipos en tiempo de
+compilación tanto en `TareaService`/`ColumnaService` (quién llama) como en
+`SignalRRealtimeNotifier` (quién implementa) — evita que un cambio de forma en el DTO rompa
+silenciosamente el payload que le llega al cliente.
+
+**Un grupo de SignalR por proyecto (`TableroHub.NombreGrupo`).** Implementa directamente el
+requisito "una sesión no recibe eventos de tableros a los que no está suscrita" (6.7): el
+cliente se une al grupo `proyecto-{id}` recién al entrar al tablero (`SuscribirseAProyecto`)
+y sale al destruir el componente (`DesuscribirseDeProyecto` + `connection.stop()`). No hace
+falta limpiar grupos manualmente en `OnDisconnectedAsync`: SignalR remueve la conexión de
+todos sus grupos automáticamente al desconectarse.
+
+**Se notifican también los eventos de Columna, no solo los de Tarea.** El enunciado (6.7)
+habla explícitamente de altas/ediciones/eliminaciones/reordenamientos de tareas; se extendió
+el mismo mecanismo a columnas (alta, renombrado, reordenamiento, baja) para que el tablero se
+sienta completamente sincronizado — administrar columnas también es parte del flujo de
+trabajo colaborativo (6.4), y el costo de agregarlo con el mismo `IRealtimeNotifier` ya
+existente fue mínimo.
+
+**Autenticación del Hub: mismo JWT, por query string.** Ya estaba resuelto desde el día 1
+(`JwtBearerEvents.OnMessageReceived` en `Program.cs` acepta `access_token` por query string
+para paths que empiezan con `/hubs`) — el navegador no puede mandar headers custom en el
+handshake de WebSocket, así que el cliente SignalR (`accessTokenFactory`) manda el token por
+ahí en vez de por el header `Authorization` habitual.
+
+**Aplicación de eventos entrantes: idempotente, no un simple "recargar todo".** El cliente
+Angular (`TableroRealtimeService` + los métodos `aplicar*` de `TableroComponent`) actualiza el
+estado local en memoria en vez de volver a pedirle todo el tablero a la Api cada vez que llega
+un evento — más rápido y no reinicia el scroll/estado de la UI. Cada `aplicar*` primero saca
+el elemento por id de donde esté y recién después lo reinserta en su posición correcta: si el
+evento que llega es el eco del propio cambio que esta sesión ya aplicó de forma optimista (la
+API de SignalR reenvía a **todo** el grupo, incluida la conexión que originó el cambio), el
+resultado neto es el mismo estado, no un duplicado — no hace falta un mecanismo de "ignorar
+mis propios eventos" con un id de conexión.
+
+**Reconexión: hay que volver a unirse al grupo.** `withAutomaticReconnect()` del cliente
+SignalR reconecta la conexión TCP/WebSocket sola, pero **no** recuerda a qué grupos
+pertenecía la conexión anterior (son conceptos del servidor, ligados al `ConnectionId`
+anterior, que cambia). `TableroRealtimeService` reinvoca `SuscribirseAProyecto` en el handler
+`onreconnected`.
+
+## Reportes (PDF/Excel)
+
+**"Una sola consulta" es dos round-trips a la base, no un único `SELECT`.**
+`EfReporteProyectoQuery` hace una consulta para el encabezado del proyecto (nombre,
+descripción) y otra con `JOIN` para las tareas (columna + responsable + prioridad). Se evaluó
+forzarlo a un único `JOIN`, pero un proyecto sin tareas todavía haría que ese `JOIN` (Proyecto
+⋈ Tarea ⋈ Columna ⋈ Usuario) devuelva cero filas — perdiendo hasta el nombre del proyecto en
+el encabezado del reporte. El requisito 6.8 ("una sola consulta... alimentan ambos formatos")
+se interpreta como: **una sola consulta compartida por ambos formatos** (no una consulta
+distinta para PDF y otra para Excel, ni N+1 por tarea) — no como un único `SELECT` literal.
+Con dos formatos duplicando la misma query sería exactamente el problema que el requisito
+busca evitar; con un único punto de consulta reutilizado por ambos exportadores, se cumple.
+
+**QuestPDF en modo Community.** `QuestPDF.Settings.License = LicenseType.Community` se
+declara una sola vez al arrancar la Api (`Program.cs`, antes de `WebApplication.CreateBuilder`
+para garantizar que corra antes de cualquier `GeneratePdf()`). Community es gratuita para
+el uso de este challenge (organización pequeña, sin fines de lucro sobre el software en sí).
+
+**Nombre de archivo armado en el backend, no en el frontend.** `ReporteService` sluggifica el
+nombre del proyecto (minúsculas, sin acentos, sin espacios: `reporte-sprint-agil-1.pdf`) y lo
+manda en el header `Content-Disposition` de la respuesta HTTP — es la fuente de verdad del
+nombre real, el frontend solo lo lee y lo usa para la descarga (`ReporteService.ts`,
+`response.headers.get('content-disposition')`).
+
+**CORS: hubo que exponer `Content-Disposition` explícitamente.** Por especificación,
+`Content-Disposition` no es uno de los headers de respuesta que el navegador expone al
+JavaScript de una request cross-origin salvo que el servidor lo declare con
+`Access-Control-Expose-Headers`. Sin `WithExposedHeaders("Content-Disposition")` en la
+política de CORS, la descarga funcionaba pero `response.headers.get(...)` devolvía `null` del
+lado del frontend — el archivo se bajaba con un nombre genérico en vez del real. Se agregó a
+la misma política `"Frontend"` ya existente.
+
+**Tests de los exportadores contra las clases reales, no fakes.** `PdfReporteExporter` y
+`ExcelReporteExporter` no dependen de EF Core ni de una base de datos — son funciones puras
+que reciben un DTO y devuelven `byte[]`. Se agregó una referencia de
+`ScrumBoard.Application.Tests` a `ScrumBoard.Infrastructure` para poder instanciarlas
+directamente en los tests y verificar que generan un PDF/XLSX real (firma de archivo válida),
+en vez de solo testear que "se llamó a un método" con un exporter fake.

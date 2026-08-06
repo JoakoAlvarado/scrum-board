@@ -15,11 +15,16 @@ public class TareaService : ITareaService
 {
     private readonly IProyectoRepository _proyectoRepository;
     private readonly IUsuarioRepository _usuarioRepository;
+    private readonly IRealtimeNotifier _realtimeNotifier;
 
-    public TareaService(IProyectoRepository proyectoRepository, IUsuarioRepository usuarioRepository)
+    public TareaService(
+        IProyectoRepository proyectoRepository,
+        IUsuarioRepository usuarioRepository,
+        IRealtimeNotifier realtimeNotifier)
     {
         _proyectoRepository = proyectoRepository;
         _usuarioRepository = usuarioRepository;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<IReadOnlyList<TareaDto>> ListarAsync(
@@ -53,7 +58,10 @@ public class TareaService : ITareaService
 
         await _proyectoRepository.GuardarCambiosAsync(ct);
 
-        return MapearADto(tarea);
+        var dto = MapearADto(tarea);
+        await _realtimeNotifier.NotificarTareaCreadaAsync(proyectoId, dto, ct);
+
+        return dto;
     }
 
     public async Task<TareaDto> ActualizarAsync(Guid proyectoId, Guid tareaId, ActualizarTareaRequest request, CancellationToken ct = default)
@@ -65,7 +73,10 @@ public class TareaService : ITareaService
         await _proyectoRepository.GuardarCambiosAsync(ct);
 
         var tarea = proyecto.Tareas.First(t => t.Id == tareaId);
-        return MapearADto(tarea);
+        var dto = MapearADto(tarea);
+        await _realtimeNotifier.NotificarTareaActualizadaAsync(proyectoId, dto, ct);
+
+        return dto;
     }
 
     public async Task<TareaDto> MoverAsync(Guid proyectoId, Guid tareaId, MoverTareaRequest request, CancellationToken ct = default)
@@ -80,7 +91,10 @@ public class TareaService : ITareaService
         await _proyectoRepository.GuardarCambiosAsync(ct);
 
         var tarea = proyecto.Tareas.First(t => t.Id == tareaId);
-        return MapearADto(tarea);
+        var dto = MapearADto(tarea);
+        await _realtimeNotifier.NotificarTareaMovidaAsync(proyectoId, dto, ct);
+
+        return dto;
     }
 
     public async Task EliminarAsync(Guid proyectoId, Guid tareaId, CancellationToken ct = default)
@@ -89,6 +103,8 @@ public class TareaService : ITareaService
 
         proyecto.EliminarTarea(tareaId);
         await _proyectoRepository.GuardarCambiosAsync(ct);
+
+        await _realtimeNotifier.NotificarTareaEliminadaAsync(proyectoId, tareaId, ct);
     }
 
     private async Task<Proyecto> ObtenerProyectoOFallarAsync(Guid proyectoId, CancellationToken ct) =>

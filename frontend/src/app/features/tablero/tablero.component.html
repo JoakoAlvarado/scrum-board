@@ -5,6 +5,11 @@
     </div>
 
     <div class="flex align-items-center gap-2 flex-wrap">
+        <button pButton pRipple label="PDF" icon="pi pi-file-pdf" class="p-button-outlined p-button-sm"
+                [loading]="descargandoPdf" (click)="descargarPdf()"></button>
+        <button pButton pRipple label="Excel" icon="pi pi-file-excel" class="p-button-outlined p-button-sm"
+                [loading]="descargandoExcel" (click)="descargarExcel()"></button>
+
         <span class="p-input-icon-left">
             <i class="pi pi-search"></i>
             <input type="text" pInputText placeholder="Buscar tarea..." [(ngModel)]="filtroTexto" />

@@ -1,8 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ConfirmationService, MessageService } from 'primeng/api';
-import { forkJoin } from 'rxjs';
+import { Subscription, forkJoin } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 
 import { Proyecto } from 'src/app/core/models/proyecto.model';
@@ -13,6 +13,8 @@ import { ProyectoService } from 'src/app/core/services/proyecto.service';
 import { ColumnaService } from 'src/app/core/services/columna.service';
 import { TareaService } from 'src/app/core/services/tarea.service';
 import { UsuarioService } from 'src/app/core/services/usuario.service';
+import { TableroRealtimeService } from 'src/app/core/services/tablero-realtime.service';
+import { ReporteService } from 'src/app/core/services/reporte.service';
 
 interface ColumnaVista {
     columna: Columna;
@@ -23,12 +25,17 @@ interface ColumnaVista {
     selector: 'app-tablero',
     templateUrl: './tablero.component.html'
 })
-export class TableroComponent implements OnInit {
+export class TableroComponent implements OnInit, OnDestroy {
     proyectoId!: string;
     proyecto: Proyecto | null = null;
     columnasVista: ColumnaVista[] = [];
     usuarios: Usuario[] = [];
     cargando = false;
+
+    private suscripciones = new Subscription();
+
+    descargandoPdf = false;
+    descargandoExcel = false;
 
     // Filtros client-side (requisito deseable 7). Mientras hay un filtro activo se
     // deshabilita el drag & drop: reordenar sobre una lista filtrada rompe el cálculo
@@ -54,6 +61,8 @@ export class TableroComponent implements OnInit {
         private columnaService: ColumnaService,
         private tareaService: TareaService,
         private usuarioService: UsuarioService,
+        private tableroRealtime: TableroRealtimeService,
+        private reporteService: ReporteService,
         private confirmationService: ConfirmationService,
         private messageService: MessageService
     ) {}
@@ -61,6 +70,103 @@ export class TableroComponent implements OnInit {
     ngOnInit(): void {
         this.proyectoId = this.route.snapshot.paramMap.get('id')!;
         this.cargarTodo();
+        this.conectarTiempoReal();
+    }
+
+    ngOnDestroy(): void {
+        this.suscripciones.unsubscribe();
+        // Requisito 6.7: cierre correcto de la conexión y de las suscripciones al
+        // destruir el componente, sin conexiones huérfanas.
+        this.tableroRealtime.desuscribirseDeProyecto(this.proyectoId);
+        this.tableroRealtime.desconectar();
+    }
+
+    private conectarTiempoReal(): void {
+        this.tableroRealtime.suscribirseAProyecto(this.proyectoId);
+
+        this.suscripciones.add(
+            this.tableroRealtime.tareaCreada$.subscribe((tarea) => this.aplicarTareaCreadaOMovida(tarea))
+        );
+        this.suscripciones.add(
+            this.tableroRealtime.tareaActualizada$.subscribe((tarea) => this.aplicarTareaActualizada(tarea))
+        );
+        this.suscripciones.add(
+            this.tableroRealtime.tareaMovida$.subscribe((tarea) => this.aplicarTareaCreadaOMovida(tarea))
+        );
+        this.suscripciones.add(
+            this.tableroRealtime.tareaEliminada$.subscribe((tareaId) => this.aplicarTareaEliminada(tareaId))
+        );
+
+        this.suscripciones.add(
+            this.tableroRealtime.columnaCreada$.subscribe((columna) => this.aplicarColumnaCreada(columna))
+        );
+        this.suscripciones.add(
+            this.tableroRealtime.columnaActualizada$.subscribe((columna) => this.aplicarColumnaActualizada(columna))
+        );
+        this.suscripciones.add(
+            this.tableroRealtime.columnaReordenada$.subscribe((columna) => this.aplicarColumnaReordenada(columna))
+        );
+        this.suscripciones.add(
+            this.tableroRealtime.columnaEliminada$.subscribe((columnaId) => this.aplicarColumnaEliminada(columnaId))
+        );
+    }
+
+    // --- Aplicación de eventos entrantes al estado local ---
+    // Todas estas funciones son idempotentes (buscan y sacan por id antes de volver a
+    // insertar): si el evento que llega es el eco de un cambio que esta misma sesión ya
+    // aplicó de forma optimista, el resultado neto es el mismo estado, no un duplicado.
+
+    private aplicarTareaCreadaOMovida(tarea: Tarea): void {
+        for (const cv of this.columnasVista) {
+            const indiceExistente = cv.tareas.findIndex((t) => t.id === tarea.id);
+            if (indiceExistente !== -1) cv.tareas.splice(indiceExistente, 1);
+        }
+
+        const columnaDestino = this.columnasVista.find((cv) => cv.columna.id === tarea.columnaId);
+        if (!columnaDestino) return;
+
+        columnaDestino.tareas.push(tarea);
+        columnaDestino.tareas.sort((a, b) => a.orden - b.orden);
+    }
+
+    private aplicarTareaActualizada(tarea: Tarea): void {
+        for (const cv of this.columnasVista) {
+            const indice = cv.tareas.findIndex((t) => t.id === tarea.id);
+            if (indice !== -1) {
+                cv.tareas[indice] = tarea;
+                return;
+            }
+        }
+    }
+
+    private aplicarTareaEliminada(tareaId: string): void {
+        for (const cv of this.columnasVista) {
+            cv.tareas = cv.tareas.filter((t) => t.id !== tareaId);
+        }
+    }
+
+    private aplicarColumnaCreada(columna: Columna): void {
+        if (this.columnasVista.some((cv) => cv.columna.id === columna.id)) return;
+
+        this.columnasVista.push({ columna, tareas: [] });
+        this.columnasVista.sort((a, b) => a.columna.orden - b.columna.orden);
+    }
+
+    private aplicarColumnaActualizada(columna: Columna): void {
+        const cv = this.columnasVista.find((c) => c.columna.id === columna.id);
+        if (cv) cv.columna = { ...cv.columna, nombre: columna.nombre };
+    }
+
+    private aplicarColumnaReordenada(columna: Columna): void {
+        const cv = this.columnasVista.find((c) => c.columna.id === columna.id);
+        if (!cv) return;
+
+        cv.columna = { ...cv.columna, orden: columna.orden };
+        this.columnasVista.sort((a, b) => a.columna.orden - b.columna.orden);
+    }
+
+    private aplicarColumnaEliminada(columnaId: string): void {
+        this.columnasVista = this.columnasVista.filter((cv) => cv.columna.id !== columnaId);
     }
 
     get hayFiltroActivo(): boolean {
@@ -265,5 +371,43 @@ export class TableroComponent implements OnInit {
                 });
             }
         });
+    }
+
+    // --- Reportes (requisito 6.8) ---
+    descargarPdf(): void {
+        this.descargandoPdf = true;
+        this.reporteService.descargarPdf(this.proyectoId).subscribe({
+            next: (archivo) => {
+                this.descargandoPdf = false;
+                this.disparaDescarga(archivo.blob, archivo.nombreArchivo);
+            },
+            error: () => {
+                this.descargandoPdf = false;
+                this.messageService.add({ severity: 'error', summary: 'No se pudo generar el PDF' });
+            }
+        });
+    }
+
+    descargarExcel(): void {
+        this.descargandoExcel = true;
+        this.reporteService.descargarExcel(this.proyectoId).subscribe({
+            next: (archivo) => {
+                this.descargandoExcel = false;
+                this.disparaDescarga(archivo.blob, archivo.nombreArchivo);
+            },
+            error: () => {
+                this.descargandoExcel = false;
+                this.messageService.add({ severity: 'error', summary: 'No se pudo generar el Excel' });
+            }
+        });
+    }
+
+    private disparaDescarga(blob: Blob, nombreArchivo: string): void {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nombreArchivo;
+        link.click();
+        window.URL.revokeObjectURL(url);
     }
 }

@@ -2,12 +2,20 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using ScrumBoard.Api.Hubs;
+using ScrumBoard.Api.Realtime;
 using ScrumBoard.Application.Ports;
 using ScrumBoard.Application.Services;
 using ScrumBoard.Infrastructure.Persistence;
 using ScrumBoard.Infrastructure.Persistence.Seed;
+using ScrumBoard.Infrastructure.Reportes;
 using ScrumBoard.Infrastructure.Repositories;
 using ScrumBoard.Infrastructure.Security;
+
+// QuestPDF requiere declarar el tipo de licencia antes de generar cualquier documento.
+// Community es gratuita para organizaciones pequeñas/proyectos como este — ver
+// docs/decisiones.md, sección "Reportes".
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,11 +34,15 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddDbContext<ScrumBoardDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// --- Puertos / adaptadores (Infrastructure) ---
+// --- Puertos / adaptadores ---
 builder.Services.AddScoped<IUsuarioRepository, EfUsuarioRepository>();
 builder.Services.AddScoped<IProyectoRepository, EfProyectoRepository>();
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+builder.Services.AddScoped<IRealtimeNotifier, SignalRRealtimeNotifier>();
+builder.Services.AddScoped<IReporteProyectoQuery, EfReporteProyectoQuery>();
+builder.Services.AddScoped<IReporteExporter, PdfReporteExporter>();
+builder.Services.AddScoped<IReporteExporter, ExcelReporteExporter>();
 
 // --- Casos de uso (Application) ---
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -38,6 +50,7 @@ builder.Services.AddScoped<IProyectoService, ProyectoService>();
 builder.Services.AddScoped<IColumnaService, ColumnaService>();
 builder.Services.AddScoped<ITareaService, TareaService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+builder.Services.AddScoped<IReporteService, ReporteService>();
 
 // --- Autenticación JWT ---
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SeccionConfig);
@@ -83,6 +96,9 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// --- SignalR (requisito 6.7: canal de tiempo real del tablero) ---
+builder.Services.AddSignalR();
+
 // --- CORS para el frontend Angular (URL configurable por entorno) ---
 var frontendUrl = builder.Configuration["FrontendUrl"] ?? "http://localhost:4200";
 
@@ -93,7 +109,12 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(frontendUrl)
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials(); // necesario para el handshake de SignalR
+            .AllowCredentials() // necesario para el handshake de SignalR
+            // Por CORS, el navegador no expone Content-Disposition al JS del frontend
+            // salvo que el servidor lo declare explícitamente acá. Sin esto, la descarga
+            // de reportes (6.8) funcionaría pero el frontend no podría leer el nombre de
+            // archivo real que arma ReporteService (le quedaría un nombre genérico).
+            .WithExposedHeaders("Content-Disposition");
     });
 });
 
@@ -160,5 +181,6 @@ app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<TableroHub>("/hubs/tablero");
 
 app.Run();

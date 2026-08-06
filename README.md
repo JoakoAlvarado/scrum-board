@@ -23,7 +23,10 @@ Excel. Desarrollado como prueba técnica para IDEASGROUP (proceso IDEASGROUP-REM
 | **Frontend — CRUD de Proyectos (tabla paginada + filtro + alta/edición/baja)** | OK |
 | **Frontend — Tablero Kanban (columnas + tareas, drag & drop, filtros)** | OK |
 | Frontend — Docker (nginx) | OK imagen armada |
-| Tiempo real (SignalR), reportes (PDF/Excel) | Pendiente |
+| **Tiempo real (SignalR) — backend: Hub + notificaciones** | OK |
+| **Tiempo real (SignalR) — frontend: cliente conectado al tablero** | OK |
+| **Reportes PDF (QuestPDF) / Excel (ClosedXML) — backend** | OK |
+| **Reportes — descarga desde el frontend** | OK |
 | **Backend — CRUD de Proyectos (paginado + filtro)** | OK |
 | Backend — middleware centralizado de excepciones | OK |
 | Backend — Swagger con autenticación Bearer | OK |
@@ -160,7 +163,7 @@ scrum-board/
 │   └── src/app/
 │       ├── core/
 │       │   ├── models/                   → interfaces que reflejan los DTOs del backend
-│       │   └── services/                 → AuthService, ProyectoService, ColumnaService, TareaService, UsuarioService
+│       │   └── services/                 → AuthService, ProyectoService, ColumnaService, TareaService, UsuarioService, TableroRealtimeService (SignalR)
 │       ├── features/
 │       │   ├── auth/login/                → login real conectado a la Api
 │       │   ├── proyectos/                 → tabla paginada + filtro + alta/edición/baja
@@ -212,12 +215,7 @@ como `(ProyectoId, Orden)` y `(ColumnaId, Orden)` respectivamente. Insertar o mo
 elemento calcula un valor intermedio entre sus nuevos vecinos (`CalculadorDeOrden`), sin
 reindexar el resto de la lista.
 
-## Patrón de exportación dual
 
-`IReporteProyectoQuery` arma un único `ReporteProyectoDto` con una sola consulta a la base de
-datos. `IReporteExporter` (Strategy) tiene una implementación por formato
-(`PdfReporteExporter`, `ExcelReporteExporter`), resueltas por factory/DI. Agregar un tercer
-formato no requiere modificar las clases existentes.
 
 ## Migraciones EF Core
 
@@ -321,6 +319,54 @@ El `responsableId` se valida contra la tabla de usuarios antes de crear/editar (
 No forma parte del modelo de dominio mínimo del enunciado — es un endpoint de apoyo de solo
 lectura, sin alta/edición/baja (fuera de alcance del challenge).
 
+## Patrón de exportación dual
+
+`IReporteProyectoQuery` (implementado por `EfReporteProyectoQuery`) arma un único
+`ReporteProyectoDto` con una sola consulta a la base de datos. `IReporteExporter` (Strategy)
+tiene una implementación por formato (`PdfReporteExporter` con QuestPDF,
+`ExcelReporteExporter` con ClosedXML), resueltas en `ReporteService` (Factory: se registran
+ambas bajo la misma interfaz en el contenedor de DI y se elige la que matchea el formato
+pedido, sin un switch/if). Agregar un tercer formato es una clase nueva + un registro en
+`Program.cs`, sin tocar las existentes.
+
+## API de Reportes
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/proyectos/{proyectoId}/reportes/pdf` | Descarga el reporte en PDF (QuestPDF) |
+| `GET` | `/api/proyectos/{proyectoId}/reportes/excel` | Descarga el reporte en Excel (ClosedXML) |
+
+Ambos formatos se generan a partir de la misma `ReporteProyectoDto` (una sola consulta,
+`EfReporteProyectoQuery`) — ver "Patrón de exportación dual" más abajo y
+`docs/decisiones.md`. El nombre del archivo lo arma el backend (nombre del proyecto
+sluggificado, ej. `reporte-sprint-agil-1.pdf`) y viaja en el header `Content-Disposition`.
+
+## Tiempo real (SignalR)
+
+Hub en `/hubs/tablero` (protegido con JWT, mismo token de sesión — requisito 6.2). Un grupo
+de SignalR por proyecto: una sesión solo recibe eventos de los tableros a los que se suscribió
+explícitamente (requisito 6.7).
+
+**Métodos que invoca el cliente:**
+
+| Método | Descripción |
+|---|---|
+| `SuscribirseAProyecto(proyectoId)` | Une la conexión al grupo del proyecto |
+| `DesuscribirseDeProyecto(proyectoId)` | La saca del grupo |
+
+**Eventos que emite el servidor** (a todo el grupo del proyecto correspondiente):
+
+| Evento | Payload | Disparado por |
+|---|---|---|
+| `TareaCreada` | `TareaDto` | `POST /tareas` |
+| `TareaActualizada` | `TareaDto` | `PUT /tareas/{id}` |
+| `TareaMovida` | `TareaDto` | `PUT /tareas/{id}/mover` |
+| `TareaEliminada` | `Guid` (id) | `DELETE /tareas/{id}` |
+| `ColumnaCreada` | `ColumnaDto` | `POST /columnas` |
+| `ColumnaActualizada` | `ColumnaDto` | `PUT /columnas/{id}` |
+| `ColumnaReordenada` | `ColumnaDto` | `PUT /columnas/{id}/orden` |
+| `ColumnaEliminada` | `Guid` (id) | `DELETE /columnas/{id}` |
+
 ## Frontend — funcionalidad implementada
 
 - **Proyectos** (`features/proyectos`): tabla paginada server-side (`p-table` con `lazy`),
@@ -331,20 +377,24 @@ lectura, sin alta/edición/baja (fuera de alcance del challenge).
   tareas entre columnas/reordenarlas como para reordenar columnas. Alta/edición de tareas en
   diálogo (`tarea-form`) con selector de responsable poblado desde `/api/usuarios`. Alta y
   renombrado de columnas inline; baja de columna con confirmación (muestra el mensaje de la
-  Api si falla por tener tareas — requisito 6.4).
+  Api si falla por tener tareas — requisito 6.4). **Sincronizado en tiempo real** vía
+  `TableroRealtimeService` (SignalR): los cambios de alta/edición/eliminación/movimiento de
+  tareas y columnas se reflejan solos en las demás sesiones conectadas al mismo tablero, sin
+  recargar (requisito 6.7).
 - **Filtros del tablero** (requisito deseable 7): búsqueda por texto, por prioridad y por
   responsable, resueltos en el cliente (los datos del tablero ya están completos en memoria).
   Con un filtro activo se **deshabilita el drag & drop** — ver justificación en
   `docs/decisiones.md`.
 - Todas las peticiones pasan por `AuthInterceptor` (JWT) y por los servicios de
   `core/services/*.service.ts`, que reflejan 1:1 los DTOs/rutas del backend.
+- **Descarga de reportes** (`ReporteService`, botones "PDF"/"Excel" en el header del
+  tablero): pide el archivo como `blob`, respeta el nombre real que arma el backend (leído
+  del header `Content-Disposition`) y dispara la descarga del navegador.
 
 ## Frontend — pendiente
 
-- Tiempo real (SignalR): hoy el tablero no se sincroniza solo entre dos sesiones — hay que
-  recargar para ver cambios de otro usuario.
-- Descarga de reportes PDF/Excel (depende de que el backend los tenga implementados).
-- Indicador de usuarios conectados (deseable, depende de SignalR).
+- Indicador de usuarios conectados al tablero (deseable — la infraestructura de grupos de
+  SignalR ya está lista, falta el contador en sí).
 - Tests de frontend (Karma/Jasmine).
 
 
@@ -356,12 +406,14 @@ generadas por EF Core, antes de la entrega final.)*
 
 ## Pruebas automatizadas
 
-Backend: `dotnet test` desde `backend/`. 16 tests, entre otros: el cálculo de la nueva
+Backend: `dotnet test` desde `backend/`. 22 tests, entre otros: el cálculo de la nueva
 posición de una tarea al reordenarla (`CalculadorDeOrdenTests`, obligatorio por 6.9), las
-reglas de negocio del agregado `Proyecto` (`ProyectoTests` — no eliminar columna con tareas,
-no mover tarea a columna de otro proyecto, eliminar/renombrar), y el flujo completo de
-creación y movimiento de tareas a través del caso de uso (`ProyectoServiceTests`,
-`TareaServiceTests`), con repositorios fake — sin EF Core ni PostgreSQL de por medio.
+reglas de negocio del agregado `Proyecto` (`ProyectoTests`), el flujo completo de creación y
+movimiento de tareas a través del caso de uso, incluida la notificación en tiempo real
+(`TareaServiceTests`), el Factory de reportes (`ReporteServiceTests`), y los exportadores
+PDF/Excel reales generando bytes válidos (`ReporteExportersTests`) — estos últimos con
+referencia directa a `ScrumBoard.Infrastructure` (no son fakes: corren QuestPDF/ClosedXML de
+verdad, sin necesidad de una base de datos).
 
 Frontend: pendiente (Día 6 del plan de ejecución).
 
