@@ -442,3 +442,7 @@ entrevista técnica, y revisó/verificó personalmente el funcionamiento real de
 
 Ver el documento de planificación completo compartido junto con la entrega (7 días,
 decisiones tecnológicas y cronograma día a día).
+
+## Diagrama del modelo de datos
+
+![Diagrama ER](docs/images/diagrama-er.png)
