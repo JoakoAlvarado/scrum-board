@@ -451,8 +451,27 @@ El candidato es responsable de cada decisión tomada, puede justificarlas y sust
 entrevista técnica, y revisó/verificó personalmente el funcionamiento real de cada componente
 (build, migraciones, seed, login) antes de darlo por resuelto.
 
-## Plan de ejecución
+## Decisiones técnicas
 
-Ver el documento de planificación completo compartido junto con la entrega (7 días,
-decisiones tecnológicas y cronograma día a día).
+Durante el desarrollo se documentaron las principales decisiones de arquitectura, las alternativas evaluadas y los motivos de cada elección.
 
+Incluye, entre otros temas:
+
+- elección de SignalR para tiempo real y alternativas descartadas;
+- estrategia de ordenamiento fraccionario para drag & drop;
+- patrón Strategy + Factory para exportación PDF/Excel;
+- decisiones de arquitectura del backend y frontend;
+- bugs encontrados durante la integración y su resolución;
+- decisiones de Docker, EF Core, Angular y SignalR.
+
+El detalle completo puede consultarse en:
+
+- `docs/decisiones.md`
+
+## Video demostrativo
+
+Para facilitar la evaluación del challenge, se adjunta un video donde se muestra el funcionamiento de la aplicación y la validación de los principales requisitos solicitados.
+
+**Enlace al video:**
+
+https://drive.google.com/file/d/1JWopNrz7XT_WQzSSxfR7eAPeYb7smGn0/view?usp=sharing
