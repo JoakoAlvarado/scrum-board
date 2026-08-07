@@ -71,8 +71,9 @@
                 </div>
                 <p *ngIf="tarea.descripcion" class="text-sm text-600 mt-1 mb-2 line-height-3">{{ tarea.descripcion }}</p>
                 <div class="flex align-items-center justify-content-between mt-2">
-                    <p-tag [value]="tarea.prioridad"
-                           [severity]="tarea.prioridad === 'Urgente' ? 'danger' : tarea.prioridad === 'Alta' ? 'warning' : tarea.prioridad === 'Media' ? 'success' : 'info'">
+                    <p-tag
+                        [value]="obtenerPrioridad(tarea.prioridad)?.label"
+                        [severity]="obtenerPrioridad(tarea.prioridad)?.severity">
                     </p-tag>
                     <span class="text-sm text-600">
                         <i class="pi pi-user mr-1"></i>{{ obtenerNombreUsuario(tarea.responsableId) }}

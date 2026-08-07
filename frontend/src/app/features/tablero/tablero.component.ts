@@ -224,6 +224,10 @@ export class TableroComponent implements OnInit, OnDestroy {
         return this.usuarios.find((u) => u.id === id)?.nombre ?? '—';
     }
 
+    obtenerPrioridad(prioridad: any) {
+        return PRIORIDADES.find(p => p.value == prioridad);
+    }
+
     // --- Drag & drop de tareas ---
     onDropTarea(event: CdkDragDrop<Tarea[]>, columnaDestino: ColumnaVista): void {
         if (this.hayFiltroActivo) return;

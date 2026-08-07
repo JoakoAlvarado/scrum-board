@@ -72,7 +72,10 @@ export class TableroRealtimeService {
 
         this.connection.on('TareaCreada', (tarea: Tarea) => this.tareaCreada$.next(tarea));
         this.connection.on('TareaActualizada', (tarea: Tarea) => this.tareaActualizada$.next(tarea));
-        this.connection.on('TareaMovida', (tarea: Tarea) => this.tareaMovida$.next(tarea));
+        // this.connection.on('TareaMovida', (tarea: Tarea) => this.tareaMovida$.next(tarea));
+        this.connection.on('TareaMovida', (tarea: Tarea) => {
+            this.tareaMovida$.next(tarea);
+        });
         this.connection.on('TareaEliminada', (tareaId: string) => this.tareaEliminada$.next(tareaId));
 
         this.connection.on('ColumnaCreada', (columna: Columna) => this.columnaCreada$.next(columna));

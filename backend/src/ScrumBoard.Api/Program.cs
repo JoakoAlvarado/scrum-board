@@ -97,7 +97,14 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 // --- SignalR (requisito 6.7: canal de tiempo real del tablero) ---
-builder.Services.AddSignalR();
+// Mismo motivo que el JsonStringEnumConverter de AddControllers (más abajo): sin esto,
+// los enums (Prioridad, EstadoProyecto) viajan como número en los eventos del Hub
+// (TareaCreada/TareaMovida/etc.), aunque en las respuestas HTTP normales ya viajen como
+// texto — son dos serializadores JSON completamente independientes.
+builder.Services.AddSignalR().AddJsonProtocol(options =>
+{
+    options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
 
 // --- CORS para el frontend Angular (URL configurable por entorno) ---
 var frontendUrl = builder.Configuration["FrontendUrl"] ?? "http://localhost:4200";

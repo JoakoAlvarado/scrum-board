@@ -18,14 +18,14 @@
         <div>
             <label for="prioridad" class="block font-medium mb-1">Prioridad *</label>
             <p-dropdown id="prioridad" formControlName="prioridad" [options]="prioridades"
-                        optionLabel="label" optionValue="value" styleClass="w-full"></p-dropdown>
+                        optionLabel="label" optionValue="value" styleClass="w-full" appendTo="body" [panelStyle]="{'max-height':'250px'}"></p-dropdown>
         </div>
 
         <div>
             <label for="responsable" class="block font-medium mb-1">Responsable *</label>
             <p-dropdown id="responsable" formControlName="responsableId" [options]="usuarios"
                         optionLabel="nombre" optionValue="id" styleClass="w-full"
-                        placeholder="Seleccioná un responsable"></p-dropdown>
+                        placeholder="Seleccioná un responsable" appendTo="body" [panelStyle]="{'max-height':'250px'}"></p-dropdown>
             <small class="p-error" *ngIf="form.get('responsableId')?.invalid && form.get('responsableId')?.touched">
                 El responsable es obligatorio.
             </small>
